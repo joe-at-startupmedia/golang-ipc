@@ -69,11 +69,11 @@ func startClient(c *Client) {
 		return
 	}
 
-	c.status = Connected
-	c.received <- &Message{Status: c.status.String(), MsgType: -1}
-
 	go c.read()
 	go c.write()
+
+	c.status = Connected
+	c.received <- &Message{Status: c.status.String(), MsgType: -1}
 }
 
 func (c *Client) read() {
