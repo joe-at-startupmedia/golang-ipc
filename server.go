@@ -83,7 +83,7 @@ func (s *Server) acceptLoop() {
 	for {
 		conn, err := s.listen.Accept()
 		if err != nil {
-			s.logger.Errorf("Server.acceptLoop -> listen.Accept err: %s", err)
+			s.logger.Debugf("Server.acceptLoop -> listen.Accept err: %s", err)
 			break
 		}
 
