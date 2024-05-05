@@ -65,6 +65,21 @@ const (
 	Disconnected
 )
 
+func (status Status) String() string {
+	return [...]string{
+		"Not Connected",
+		"Listening",
+		"Connecting",
+		"Connected",
+		"Reconnecting",
+		"Closed",
+		"Closing",
+		"Error",
+		"Timeout",
+		"Disconnected",
+	}[status]
+}
+
 // ServerConfig - used to pass configuation overrides to ServerStart()
 type ServerConfig struct {
 	MaxMsgSize        int
