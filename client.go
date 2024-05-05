@@ -1,10 +1,8 @@
 package ipc
 
 import (
-	"bufio"
 	"errors"
 	"io"
-	"log"
 	"net"
 	"strings"
 	"time"
@@ -20,12 +18,10 @@ func StartClient(ipcName string, config *ClientConfig) (*Client, error) {
 
 	}
 
-	cc := &Client{
-		Name:     ipcName,
-		status:   NotConnected,
-		received: make(chan *Message),
-		toWrite:  make(chan *Message),
-	}
+	cc := &Client{Actor: NewActor(&ActorConfig{
+		Name:         ipcName,
+		ClientConfig: config,
+	})}
 
 	if config == nil {
 
@@ -43,17 +39,17 @@ func StartClient(ipcName string, config *ClientConfig) (*Client, error) {
 		if config.RetryTimer < 1 {
 			cc.retryTimer = time.Duration(1)
 		} else {
-			cc.retryTimer = time.Duration(config.RetryTimer)
+			cc.retryTimer = config.RetryTimer
 		}
 
 	}
 
-	go startClient(cc)
+	go start(cc)
 
 	return cc, nil
 }
 
-func startClient(c *Client) {
+func start(c *Client) {
 
 	c.status = Connecting
 	c.received <- &Message{Status: c.status.String(), MsgType: -1}
@@ -82,16 +78,16 @@ func (c *Client) dial() error {
 	for {
 
 		if c.timeout != 0 {
-
-			if time.Since(startTime).Seconds() > c.timeout {
+			c.logger.Debugf("Seconds since: %f, timeout seconds: %f", time.Since(startTime).Seconds(), c.timeout.Seconds())
+			if time.Since(startTime).Seconds() > c.timeout.Seconds() {
 				c.status = Closed
 				return errors.New("timed out trying to connect")
 			}
 		}
 
-		conn, err := net.Dial("unix", base+c.Name+sock)
+		conn, err := net.Dial("unix", base+c.name+sock)
 		if err != nil {
-
+			c.logger.Errorf("Client.dial err: %s", err)
 			if strings.Contains(err.Error(), "connect: no such file or directory") {
 
 			} else if strings.Contains(err.Error(), "connect: connection refused") {
@@ -106,6 +102,7 @@ func (c *Client) dial() error {
 
 			err = c.handshake()
 			if err != nil {
+				c.logger.Errorf("Client.dial handshake err: %s", err)
 				return err
 			}
 
@@ -118,12 +115,11 @@ func (c *Client) dial() error {
 
 }
 
-func (c *Client) read() {
+func (a *Client) read() {
 	bLen := make([]byte, 4)
 
 	for {
-
-		res := c.readData(bLen)
+		res := a.readData(bLen)
 		if !res {
 			break
 		}
@@ -132,15 +128,16 @@ func (c *Client) read() {
 
 		msgRecvd := make([]byte, mLen)
 
-		res = c.readData(msgRecvd)
+		res = a.readData(msgRecvd)
 		if !res {
 			break
 		}
 
 		if bytesToInt(msgRecvd[:4]) == 0 {
 			//  type 0 = control message
+			a.logger.Debugf("Client.read - control message encountered")
 		} else {
-			c.received <- &Message{Data: msgRecvd[4:], MsgType: bytesToInt(msgRecvd[:4])}
+			a.received <- &Message{Data: msgRecvd[4:], MsgType: bytesToInt(msgRecvd[:4])}
 		}
 	}
 }
@@ -149,19 +146,20 @@ func (c *Client) readData(buff []byte) bool {
 
 	_, err := io.ReadFull(c.conn, buff)
 	if err != nil {
-		if strings.Contains(err.Error(), "EOF") { // the connection has been closed by the client.
-			c.conn.Close()
-
-			if c.status != Closing || c.status == Closed {
-				go c.reconnect()
-			}
-			return false
-		}
-
+		c.logger.Errorf("Client.readData err: %s", err)
 		if c.status == Closing {
 			c.status = Closed
 			c.received <- &Message{Status: c.status.String(), MsgType: -1}
-			c.received <- &Message{Err: errors.New("client has closed the connection"), MsgType: -2}
+			c.received <- &Message{Err: errors.New("client has closed the connection"), MsgType: -1}
+			return false
+		}
+
+		if err == io.EOF { // the connection has been closed by the client.
+			c.conn.Close()
+
+			if c.status != Closing {
+				go c.reconnect()
+			}
 			return false
 		}
 
@@ -176,11 +174,13 @@ func (c *Client) readData(buff []byte) bool {
 
 func (c *Client) reconnect() {
 
+	c.logger.Warn("Client.reconnect called")
 	c.status = ReConnecting
 	c.received <- &Message{Status: c.status.String(), MsgType: -1}
 
 	err := c.dial() // connect to the pipe
 	if err != nil {
+		c.logger.Errorf("Client.reconnect -> dial err: %s", err)
 		if err.Error() == "timed out trying to connect" {
 			c.status = Timeout
 			c.received <- &Message{Status: c.status.String(), MsgType: -1}
@@ -194,96 +194,4 @@ func (c *Client) reconnect() {
 	c.received <- &Message{Status: c.status.String(), MsgType: -1}
 
 	go c.read()
-}
-
-// Read - blocking function that receices messages
-// if MsgType is a negative number its an internal message
-func (c *Client) Read() (*Message, error) {
-
-	m, ok := (<-c.received)
-	if !ok {
-		return nil, errors.New("the received channel has been closed")
-	}
-
-	if m.Err != nil {
-		close(c.received)
-		close(c.toWrite)
-		return nil, m.Err
-	}
-
-	return m, nil
-}
-
-// Write - writes a  message to the ipc connection.
-// msgType - denotes the type of data being sent. 0 is a reserved type for internal messages and errors.
-func (c *Client) Write(msgType int, message []byte) error {
-
-	if msgType == 0 {
-		return errors.New("Message type 0 is reserved")
-	}
-
-	if c.status != Connected {
-		return errors.New(c.status.String())
-	}
-
-	mlen := len(message)
-	if mlen > c.maxMsgSize {
-		return errors.New("Message exceeds maximum message length")
-	}
-
-	c.toWrite <- &Message{MsgType: msgType, Data: message}
-
-	return nil
-}
-
-func (c *Client) write() {
-
-	for {
-
-		m, ok := <-c.toWrite
-
-		if !ok {
-			break
-		}
-
-		toSend := append(intToBytes(m.MsgType), m.Data...)
-		writer := bufio.NewWriter(c.conn)
-		writer.Write(intToBytes(len(toSend)))
-		writer.Write(toSend)
-
-		err := writer.Flush()
-		if err != nil {
-			log.Println("error flushing data", err)
-			continue
-		}
-
-		time.Sleep(2 * time.Millisecond)
-	}
-}
-
-// getStatus - get the current status of the connection
-func (c *Client) getStatus() Status {
-
-	return c.status
-}
-
-// StatusCode - returns the current connection status
-func (c *Client) StatusCode() Status {
-	return c.status
-}
-
-// Status - returns the current connection status as a string
-func (c *Client) Status() string {
-
-	return c.status.String()
-}
-
-// Close - closes the connection
-func (c *Client) Close() {
-
-	c.status = Closing
-
-	if c.conn != nil {
-		c.conn.Close()
-	}
 }

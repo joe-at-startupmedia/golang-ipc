@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"time"
 
 	ipc "github.com/joe-at-startupmedia/golang-ipc"
 )
@@ -15,6 +16,8 @@ func main() {
 		log.Println(err)
 		return
 	}
+
+	time.Sleep(time.Duration(ipc.GetDefaultClientConnectWait()) * time.Second)
 
 	for {
 

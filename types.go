@@ -1,33 +1,34 @@
 package ipc
 
 import (
+	"github.com/sirupsen/logrus"
 	"net"
 	"time"
 )
 
-// Server - holds the details of the server connection & config.
-type Server struct {
+type Actor struct {
 	name       string
-	listen     net.Listener
 	conn       net.Conn
 	status     Status
 	received   chan (*Message)
 	toWrite    chan (*Message)
-	timeout    time.Duration
 	maxMsgSize int
-	unMask     bool
+	isServer   bool
+	logger     *logrus.Logger
+}
+
+// Server - holds the details of the server connection & config.
+type Server struct {
+	Actor
+	listen net.Listener
+	unMask bool
 }
 
 // Client - holds the details of the client connection and config.
 type Client struct {
-	Name       string
-	conn       net.Conn
-	status     Status
-	timeout    float64       //
+	Actor
+	timeout    time.Duration //
 	retryTimer time.Duration // number of seconds before trying to connect again
-	received   chan (*Message)
-	toWrite    chan (*Message)
-	maxMsgSize int
 }
 
 // Message - contains the received message
@@ -80,14 +81,24 @@ func (status Status) String() string {
 	}[status]
 }
 
+type ActorConfig struct {
+	Name         string
+	MaxMsgSize   int
+	IsServer     bool
+	ServerConfig *ServerConfig
+	ClientConfig *ClientConfig
+}
+
 // ServerConfig - used to pass configuation overrides to ServerStart()
 type ServerConfig struct {
 	MaxMsgSize        int
 	UnmaskPermissions bool
+	LogLevel          string
 }
 
 // ClientConfig - used to pass configuation overrides to ClientStart()
 type ClientConfig struct {
-	Timeout    float64
+	Timeout    time.Duration
 	RetryTimer time.Duration
+	LogLevel   string
 }

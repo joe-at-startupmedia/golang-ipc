@@ -1,14 +1,11 @@
 package ipc
 
 import (
-	"bufio"
 	"errors"
 	"io"
-	"log"
 	"net"
 	"os"
 	"syscall"
-	"time"
 )
 
 // StartServer - starts the ipc server.
@@ -21,18 +18,15 @@ func StartServer(ipcName string, config *ServerConfig) (*Server, error) {
 		return nil, err
 	}
 
-	s := &Server{
-		name:     ipcName,
-		status:   NotConnected,
-		received: make(chan *Message),
-		toWrite:  make(chan *Message),
-	}
+	s := &Server{Actor: NewActor(&ActorConfig{
+		Name:         ipcName,
+		IsServer:     true,
+		ServerConfig: config,
+	})}
 
 	if config == nil {
-		s.timeout = 0
 		s.maxMsgSize = maxMsgSize
 		s.unMask = false
-
 	} else {
 
 		if config.MaxMsgSize < 1024 {
@@ -70,6 +64,7 @@ func (s *Server) run() error {
 	}
 
 	if err != nil {
+		s.logger.Errorf("Server.run err: %s", err)
 		return err
 	}
 
@@ -88,6 +83,7 @@ func (s *Server) acceptLoop() {
 	for {
 		conn, err := s.listen.Accept()
 		if err != nil {
+			s.logger.Errorf("Server.acceptLoop -> listen.Accept err: %s", err)
 			break
 		}
 
@@ -97,6 +93,7 @@ func (s *Server) acceptLoop() {
 
 			err2 := s.handshake()
 			if err2 != nil {
+				s.logger.Errorf("Server.acceptLoop handshake err: %s", err2)
 				s.received <- &Message{Err: err2, MsgType: -1}
 				s.status = Error
 				s.listen.Close()
@@ -117,16 +114,12 @@ func (s *Server) acceptLoop() {
 
 }
 
-func (s *Server) read() {
-
+func (a *Server) read() {
 	bLen := make([]byte, 4)
 
 	for {
-
-		res := s.readData(bLen)
+		res := a.readData(bLen)
 		if !res {
-			s.conn.Close()
-
 			break
 		}
 
@@ -134,29 +127,18 @@ func (s *Server) read() {
 
 		msgRecvd := make([]byte, mLen)
 
-		res = s.readData(msgRecvd)
+		res = a.readData(msgRecvd)
 		if !res {
-			s.conn.Close()
 			break
 		}
 
-		//this wierd edgecase happens when requests come too quicklu
-		/*
-			if cap(msgRecvd) == 0 {
-				//log.Panicln("msgRecvd capacity is zero, requests coming too quickly?")
-				s.status = Disconnected
-				s.received <- &Message{Status: s.status.String(), MsgType: -1}
-			} else
-
-		*/
 		if bytesToInt(msgRecvd[:4]) == 0 {
 			//  type 0 = control message
+			a.logger.Debugf("Server.read - control message encountered")
 		} else {
-			s.received <- &Message{Data: msgRecvd[4:], MsgType: bytesToInt(msgRecvd[:4])}
+			a.received <- &Message{Data: msgRecvd[4:], MsgType: bytesToInt(msgRecvd[:4])}
 		}
-
 	}
-
 }
 
 func (s *Server) readData(buff []byte) bool {
@@ -182,93 +164,6 @@ func (s *Server) readData(buff []byte) bool {
 	}
 
 	return true
-}
-
-// Read - blocking function, reads each message recieved
-// if MsgType is a negative number its an internal message
-func (s *Server) Read() (*Message, error) {
-
-	m, ok := <-s.received
-	if !ok {
-		return nil, errors.New("the received channel has been closed")
-	}
-
-	if m.Err != nil {
-		//close(s.received)
-		//close(s.toWrite)
-		return nil, m.Err
-	}
-
-	return m, nil
-}
-
-// Write - writes a message to the ipc connection
-// msgType - denotes the type of data being sent. 0 is a reserved type for internal messages and errors.
-func (s *Server) Write(msgType int, message []byte) error {
-
-	if msgType == 0 {
-		return errors.New("message type 0 is reserved")
-	}
-
-	mlen := len(message)
-
-	if mlen > s.maxMsgSize {
-		return errors.New("message exceeds maximum message length")
-	}
-
-	if s.status == Connected {
-
-		s.toWrite <- &Message{MsgType: msgType, Data: message}
-
-	} else {
-		return errors.New(s.status.String())
-	}
-
-	return nil
-}
-
-func (s *Server) write() {
-
-	for {
-
-		m, ok := <-s.toWrite
-
-		if !ok {
-			break
-		}
-
-		toSend := append(intToBytes(m.MsgType), m.Data...)
-		writer := bufio.NewWriter(s.conn)
-		//first send the message size
-		writer.Write(intToBytes(len(toSend)))
-		//last send the message
-		writer.Write(toSend)
-
-		err := writer.Flush()
-		if err != nil {
-			log.Println("error flushing data", err)
-			continue
-		}
-
-		time.Sleep(2 * time.Millisecond)
-
-	}
-}
-
-// getStatus - get the current status of the connection
-func (s *Server) getStatus() Status {
-	return s.status
-}
-
-// StatusCode - returns the current connection status
-func (s *Server) StatusCode() Status {
-	return s.status
-}
-
-// Status - returns the current connection status as a string
-func (s *Server) Status() string {
-
-	return s.status.String()
 }
 
 // Close - closes the connection
