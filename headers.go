@@ -11,7 +11,6 @@ func intToBytes(mLen int) []byte {
 	binary.BigEndian.PutUint32(b, uint32(mLen))
 
 	return b
-
 }
 
 func bytesToInt(b []byte) int {
@@ -21,5 +20,4 @@ func bytesToInt(b []byte) int {
 	binary.Read(bytes.NewReader(b[:]), binary.BigEndian, &mlen) // message length
 
 	return int(mlen)
-
 }

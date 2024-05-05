@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"net"
 	"strings"
 	"time"
 )
@@ -30,7 +31,6 @@ func StartClient(ipcName string, config *ClientConfig) (*Client, error) {
 
 		cc.timeout = 0
 		cc.retryTimer = time.Duration(20)
-		cc.encryptionReq = true
 
 	} else {
 
@@ -46,11 +46,6 @@ func StartClient(ipcName string, config *ClientConfig) (*Client, error) {
 			cc.retryTimer = time.Duration(config.RetryTimer)
 		}
 
-		if !config.Encryption {
-			cc.encryptionReq = false
-		} else {
-			cc.encryptionReq = true // defualt is to always enforce encryption
-		}
 	}
 
 	go startClient(cc)
@@ -76,6 +71,53 @@ func startClient(c *Client) {
 	c.received <- &Message{Status: c.status.String(), MsgType: -1}
 }
 
+// Client connect to the unix socket created by the server -  for unix and linux
+func (c *Client) dial() error {
+
+	base := "/tmp/"
+	sock := ".sock"
+
+	startTime := time.Now()
+
+	for {
+
+		if c.timeout != 0 {
+
+			if time.Since(startTime).Seconds() > c.timeout {
+				c.status = Closed
+				return errors.New("timed out trying to connect")
+			}
+		}
+
+		conn, err := net.Dial("unix", base+c.Name+sock)
+		if err != nil {
+
+			if strings.Contains(err.Error(), "connect: no such file or directory") {
+
+			} else if strings.Contains(err.Error(), "connect: connection refused") {
+
+			} else {
+				c.received <- &Message{Err: err, MsgType: -1}
+			}
+
+		} else {
+
+			c.conn = conn
+
+			err = c.handshake()
+			if err != nil {
+				return err
+			}
+
+			return nil
+		}
+
+		time.Sleep(c.retryTimer * time.Second)
+
+	}
+
+}
+
 func (c *Client) read() {
 	bLen := make([]byte, 4)
 
@@ -95,25 +137,10 @@ func (c *Client) read() {
 			break
 		}
 
-		if c.encryption {
-			msgFinal, err := decrypt(*c.enc.cipher, msgRecvd)
-			if err != nil {
-				break
-			}
-
-			if bytesToInt(msgFinal[:4]) == 0 {
-				//  type 0 = control message
-			} else {
-				c.received <- &Message{Data: msgFinal[4:], MsgType: bytesToInt(msgFinal[:4])}
-			}
-
+		if bytesToInt(msgRecvd[:4]) == 0 {
+			//  type 0 = control message
 		} else {
-
-			if bytesToInt(msgRecvd[:4]) == 0 {
-				//  type 0 = control message
-			} else {
-				c.received <- &Message{Data: msgRecvd[4:], MsgType: bytesToInt(msgRecvd[:4])}
-			}
+			c.received <- &Message{Data: msgRecvd[4:], MsgType: bytesToInt(msgRecvd[:4])}
 		}
 	}
 }
@@ -219,24 +246,8 @@ func (c *Client) write() {
 			break
 		}
 
-		toSend := intToBytes(m.MsgType)
-
+		toSend := append(intToBytes(m.MsgType), m.Data...)
 		writer := bufio.NewWriter(c.conn)
-
-		if c.encryption {
-			toSend = append(toSend, m.Data...)
-			toSendEnc, err := encrypt(*c.enc.cipher, toSend)
-			if err != nil {
-				log.Println("error encrypting data", err)
-				continue
-			}
-			toSend = toSendEnc
-		} else {
-
-			toSend = append(toSend, m.Data...)
-
-		}
-
 		writer.Write(intToBytes(len(toSend)))
 		writer.Write(toSend)
 
@@ -246,6 +257,7 @@ func (c *Client) write() {
 			continue
 		}
 
+		time.Sleep(2 * time.Millisecond)
 	}
 }
 

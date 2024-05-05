@@ -5,6 +5,9 @@ import (
 	"errors"
 	"io"
 	"log"
+	"net"
+	"os"
+	"syscall"
 	"time"
 )
 
@@ -28,7 +31,6 @@ func StartServer(ipcName string, config *ServerConfig) (*Server, error) {
 	if config == nil {
 		s.timeout = 0
 		s.maxMsgSize = maxMsgSize
-		s.encryption = true
 		s.unMask = false
 
 	} else {
@@ -39,22 +41,46 @@ func StartServer(ipcName string, config *ServerConfig) (*Server, error) {
 			s.maxMsgSize = config.MaxMsgSize
 		}
 
-		if !config.Encryption {
-			s.encryption = false
-		} else {
-			s.encryption = true
-		}
-
-		if config.UnmaskPermissions {
-			s.unMask = true
-		} else {
-			s.unMask = false
-		}
+		s.unMask = config.UnmaskPermissions
 	}
 
 	err = s.run()
 
 	return s, err
+}
+
+func (s *Server) run() error {
+
+	base := "/tmp/"
+	sock := ".sock"
+
+	if err := os.RemoveAll(base + s.name + sock); err != nil {
+		return err
+	}
+
+	var oldUmask int
+	if s.unMask {
+		oldUmask = syscall.Umask(0)
+	}
+
+	listen, err := net.Listen("unix", base+s.name+sock)
+
+	if s.unMask {
+		syscall.Umask(oldUmask)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	s.listen = listen
+
+	go s.acceptLoop()
+
+	s.status = Listening
+
+	return nil
+
 }
 
 func (s *Server) acceptLoop() {
@@ -111,29 +137,22 @@ func (s *Server) read() {
 		res = s.readData(msgRecvd)
 		if !res {
 			s.conn.Close()
-
 			break
 		}
 
-		if s.encryption {
-			msgFinal, err := decrypt(*s.enc.cipher, msgRecvd)
-			if err != nil {
-				s.received <- &Message{Err: err, MsgType: -1}
-				continue
-			}
+		//this wierd edgecase happens when requests come too quicklu
+		/*
+			if cap(msgRecvd) == 0 {
+				//log.Panicln("msgRecvd capacity is zero, requests coming too quickly?")
+				s.status = Disconnected
+				s.received <- &Message{Status: s.status.String(), MsgType: -1}
+			} else
 
-			if bytesToInt(msgFinal[:4]) == 0 {
-				//  type 0 = control message
-			} else {
-				s.received <- &Message{Data: msgFinal[4:], MsgType: bytesToInt(msgFinal[:4])}
-			}
-
+		*/
+		if bytesToInt(msgRecvd[:4]) == 0 {
+			//  type 0 = control message
 		} else {
-			if bytesToInt(msgRecvd[:4]) == 0 {
-				//  type 0 = control message
-			} else {
-				s.received <- &Message{Data: msgRecvd[4:], MsgType: bytesToInt(msgRecvd[:4])}
-			}
+			s.received <- &Message{Data: msgRecvd[4:], MsgType: bytesToInt(msgRecvd[:4])}
 		}
 
 	}
@@ -169,7 +188,7 @@ func (s *Server) readData(buff []byte) bool {
 // if MsgType is a negative number its an internal message
 func (s *Server) Read() (*Message, error) {
 
-	m, ok := (<-s.received)
+	m, ok := <-s.received
 	if !ok {
 		return nil, errors.New("the received channel has been closed")
 	}
@@ -218,26 +237,11 @@ func (s *Server) write() {
 			break
 		}
 
-		toSend := intToBytes(m.MsgType)
-
+		toSend := append(intToBytes(m.MsgType), m.Data...)
 		writer := bufio.NewWriter(s.conn)
-
-		if s.encryption {
-			toSend = append(toSend, m.Data...)
-			toSendEnc, err := encrypt(*s.enc.cipher, toSend)
-			if err != nil {
-				log.Println("error encrypting data", err)
-				continue
-			}
-
-			toSend = toSendEnc
-		} else {
-
-			toSend = append(toSend, m.Data...)
-
-		}
-
+		//first send the message size
 		writer.Write(intToBytes(len(toSend)))
+		//last send the message
 		writer.Write(toSend)
 
 		err := writer.Flush()
@@ -251,13 +255,10 @@ func (s *Server) write() {
 	}
 }
 
-
 // getStatus - get the current status of the connection
 func (s *Server) getStatus() Status {
-
 	return s.status
 }
-
 
 // StatusCode - returns the current connection status
 func (s *Server) StatusCode() Status {
