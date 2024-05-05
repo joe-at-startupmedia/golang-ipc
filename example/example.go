@@ -11,7 +11,10 @@ func main() {
 
 	go server()
 
-	c, err := ipc.StartClient("example1", nil)
+	c, err := ipc.StartClient("example1", &ipc.ClientConfig{
+		Timeout:    0,
+		RetryTimer: 0,
+	})
 	if err != nil {
 		log.Println(err)
 		return

@@ -1232,18 +1232,15 @@ func TestServerReconnect2(t *testing.T) {
 		if m.Status == "Connected" && connect == false {
 			hasConnected <- true
 			connect = true
-			log.Print("got x")
 		}
 
 		if m.Status == "Disconnected" {
 			hasDisconnected <- true
 			disconnect = true
-			log.Print("got x")
 		}
 
 		if m.Status == "Connected" && connect == true && disconnect == true {
 			hasReconnected <- true
-			log.Print("got z")
 			return
 		}
 	}
@@ -1296,7 +1293,6 @@ func TestClientReadClose(t *testing.T) {
 			if err3 != nil {
 				log.Printf("err: %s", err3)
 				if err3.Error() == "the received channel has been closed" {
-					log.Print("got a")
 					clientError <- true // after the connection times out the received channel is closed, so we're now testing that the close error is returned.
 					// This is the only error the received function returns.
 					break
@@ -1305,17 +1301,14 @@ func TestClientReadClose(t *testing.T) {
 
 			if err3 == nil {
 				if m.Status == "Connected" {
-					log.Print("got b")
 					clientConnected <- true
 				}
 
 				if m.Status == "Reconnecting" {
-					log.Print("got c")
 					reconnect = true
 				}
 
 				if m.Status == "Timeout" && reconnect == true {
-					log.Print("got d")
 					clientTimout <- true
 				}
 			}
@@ -1326,11 +1319,8 @@ func TestClientReadClose(t *testing.T) {
 	<-connected
 	<-clientConnected
 
-	log.Print("got X")
 	sc.Close()
-	log.Print("got Y")
 	<-clientTimout
-	log.Print("got Z")
 	<-clientError
 }
 
