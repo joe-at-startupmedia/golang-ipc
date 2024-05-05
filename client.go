@@ -87,12 +87,12 @@ func (c *Client) dial() error {
 
 		conn, err := net.Dial("unix", base+c.name+sock)
 		if err != nil {
-			c.logger.Errorf("Client.dial err: %s", err)
-			if strings.Contains(err.Error(), "connect: no such file or directory") {
-
-			} else if strings.Contains(err.Error(), "connect: connection refused") {
-
+			//connect: no such file or directory happens a lot when the client connection closes under normal circumstances
+			if strings.Contains(err.Error(), "connect: no such file or directory") ||
+				strings.Contains(err.Error(), "connect: connection refused") {
+				c.logger.Debugf("Client.dial err: %s", err)
 			} else {
+				c.logger.Errorf("Client.dial err: %s", err)
 				c.received <- &Message{Err: err, MsgType: -1}
 			}
 
