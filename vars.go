@@ -1,5 +1,10 @@
 package ipc
 
-const version = 2 // ipc package version
+import "github.com/sirupsen/logrus"
 
-const maxMsgSize = 3145728 // 3Mb  - Maximum bytes allowed for each message
+const (
+	VERSION                     = 2       // ipc package VERSION
+	MAX_MSG_SIZE                = 3145728 // 3Mb  - Maximum bytes allowed for each message
+	DEFAULT_CLIENT_CONNECT_WAIT = 2
+	DEFAULT_LOG_LEVEL           = logrus.ErrorLevel //
+)

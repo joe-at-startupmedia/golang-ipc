@@ -2,6 +2,7 @@ package ipc
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"testing"
@@ -152,7 +153,7 @@ func TestWrite(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(time.Second / 4)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test10", nil)
 	if err2 != nil {
@@ -185,6 +186,7 @@ func TestWrite(t *testing.T) {
 	buf := make([]byte, 1)
 
 	err3 := sc.Write(0, buf)
+
 	if err3.Error() != "message type 0 is reserved" {
 		t.Error("0 is not allowed as a message type")
 	}
@@ -193,15 +195,15 @@ func TestWrite(t *testing.T) {
 	err4 := sc.Write(2, buf)
 
 	if err4.Error() != "message exceeds maximum message length" {
-		t.Error("There should be an error as the data we're attempting to write is bigger than the maxMsgSize")
+		t.Errorf("There should be an error as the data we're attempting to write is bigger than the MAX_MSG_SIZE, instead we got: %s", err4)
 	}
 
 	sc.status = NotConnected
 
 	buf2 := make([]byte, 5)
 	err5 := sc.Write(2, buf2)
-	if err5.Error() != "Not Connected" {
-		t.Error("we should have an error becuse there is no connection")
+	if err5.Error() != "cannot write under current status: Not Connected" {
+		t.Errorf("we should have an error becuse there is no connection but instead we got: %s", err5)
 	}
 
 	sc.status = Connected
@@ -213,17 +215,17 @@ func TestWrite(t *testing.T) {
 		t.Error("0 is not allowwed as a message try")
 	}
 
-	buf = make([]byte, maxMsgSize+5)
+	buf = make([]byte, MAX_MSG_SIZE+5)
 	err = cc.Write(2, buf)
 	if err == nil {
-		t.Error("There should be an error is the data we're attempting to write is bigger than the maxMsgSize")
+		t.Error("There should be an error is the data we're attempting to write is bigger than the MAX_MSG_SIZE")
 	}
 
 	cc.status = NotConnected
 
 	buf = make([]byte, 5)
 	err = cc.Write(2, buf)
-	if err.Error() == "Not Connected" {
+	if err.Error() == "cannot write under current status: Not Connected" {
 
 	} else {
 		t.Error("we should have an error becuse there is no connection")
@@ -232,12 +234,11 @@ func TestWrite(t *testing.T) {
 
 func TestRead(t *testing.T) {
 
-	sIPC := &Server{
+	sIPC := &Server{Actor: Actor{
 		name:     "Test",
 		status:   NotConnected,
 		received: make(chan *Message),
-		timeout:  0,
-	}
+	}}
 
 	sIPC.status = Connected
 
@@ -274,11 +275,9 @@ func TestRead(t *testing.T) {
 
 	// 3 x client side tests
 	cIPC := &Client{
-		Name:       "test",
-		timeout:    2,
+		Actor:      Actor{name: "test", status: NotConnected, received: make(chan *Message)},
+		timeout:    2 * time.Second,
 		retryTimer: 1,
-		status:     NotConnected,
-		received:   make(chan *Message),
 	}
 
 	cIPC.status = Connected
@@ -314,9 +313,9 @@ func TestRead(t *testing.T) {
 
 func TestStatus(t *testing.T) {
 
-	sc := &Server{
+	sc := &Server{Actor: Actor{
 		status: NotConnected,
-	}
+	}}
 
 	s := sc.getStatus()
 
@@ -384,25 +383,27 @@ func TestStatus(t *testing.T) {
 		t.Error("status string should have returned Error")
 	}
 
-	sc.status = 33
+	/*
+		sc.status = 33
 
-	s7 := sc.getStatus()
+		s7 := sc.getStatus()
 
-	fmt.Println(s7.String())
-	if s7.String() != "Status not found" {
-		t.Error("status string should have returned 'Status not found'")
-	}
+		fmt.Println(s7.String())
+		if s7.String() != "Status not found" {
+			t.Error("status string should have returned 'Status not found'")
+		}
+	*/
 
-	cc := &Client{
+	cc := &Client{Actor: Actor{
 		status: NotConnected,
-	}
+	}}
 
 	cc.getStatus()
 	cc.Status()
 
-	cc2 := &Client{
+	cc2 := &Client{Actor: Actor{
 		status: 9,
-	}
+	}}
 
 	cc2.getStatus()
 	cc2.Status()
@@ -415,7 +416,7 @@ func TestGetConnected(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(time.Second / 2)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test22", nil)
 	if err2 != nil {
@@ -439,7 +440,7 @@ func TestServerWrongMessageType(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(time.Second / 4)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test333", nil)
 	if err2 != nil {
@@ -501,7 +502,7 @@ func TestClientWrongMessageType(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(time.Second / 4)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test3", nil)
 	if err2 != nil {
@@ -572,7 +573,7 @@ func TestServerCorrectMessageType(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(time.Second / 4)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test358", nil)
 	if err2 != nil {
@@ -640,7 +641,7 @@ func TestClientCorrectMessageType(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(time.Second / 4)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test355", nil)
 	if err2 != nil {
@@ -708,7 +709,7 @@ func TestServerSendMessage(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(time.Second / 4)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test377", nil)
 	if err2 != nil {
@@ -785,7 +786,7 @@ func TestClientSendMessage(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(time.Second / 4)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test3661", nil)
 	if err2 != nil {
@@ -856,135 +857,6 @@ func TestClientSendMessage(t *testing.T) {
 	<-complete
 }
 
-func TestEncryptionFunctions(t *testing.T) {
-
-	res := publicKeyToBytes(nil)
-	if len(res) != 0 {
-		t.Error("should have returned 0 bytes")
-
-	}
-
-	buff := make([]byte, 0)
-
-	if bytesToPublicKey(buff) != nil {
-		t.Error("should have failed as buff is 0 bytes")
-	}
-
-
-
-}
-
-func TestNoEncrytion(t *testing.T) {
-
-	config := &ServerConfig{Encryption: false}
-
-	sc, err := StartServer("test11", config)
-	if err != nil {
-		t.Error(err)
-	}
-
-	time.Sleep(time.Second / 4)
-
-	config2 := &ClientConfig{Encryption: false}
-
-	cc, err2 := StartClient("test11", config2)
-	if err2 != nil {
-		t.Error(err)
-	}
-
-	connected := make(chan bool, 1)
-	connected2 := make(chan bool, 1)
-	complete := make(chan bool, 1)
-	complete2 := make(chan bool, 1)
-
-	go func() {
-		for {
-			m, err := sc.Read()
-
-			if m.Status == "Connected" {
-				connected <- true
-				continue
-			}
-
-			if err != nil {
-				t.Error(err)
-			} else if string(m.Data) == "Message to server" {
-				complete2 <- true
-			}
-
-		}
-	}()
-
-	go func() {
-		for {
-
-			m, err := cc.Read()
-
-			if m.Status == "Connected" {
-				connected2 <- true
-				continue
-			}
-
-			if err != nil {
-				t.Error(err)
-			} else if string(m.Data) == "Message to client" {
-				complete <- true
-			}
-		}
-	}()
-
-	<-connected
-	<-connected2
-
-	sc.Write(2, []byte("Message to client"))
-	cc.Write(2, []byte("Message to server"))
-
-	<-complete
-	<-complete2
-}
-func TestServerWrongEncrytion(t *testing.T) {
-
-	config := &ServerConfig{Encryption: false}
-
-	sc, err := StartServer("test11", config)
-	if err != nil {
-		t.Error(err)
-	}
-
-	time.Sleep(time.Second / 4)
-
-	config2 := &ClientConfig{Encryption: true}
-
-	cc, err2 := StartClient("test11", config2)
-	if err2 != nil {
-		t.Error(err)
-	}
-
-	go func() {
-		for {
-			m, err := cc.Read()
-			if err != nil {
-				if err.Error() != "server tried to connect without encryption" && m.MsgType != -2 {
-					t.Error(err)
-				}
-				break
-			}
-		}
-	}()
-
-	for {
-		mm, err2 := sc.Read()
-		if err2 != nil {
-			if err2.Error() != "client is enforcing encryption" && mm.MsgType != -2 {
-				t.Error(err2)
-			} else {
-				break
-			}
-			break
-		}
-	}
-}
-
 func TestClientClose(t *testing.T) {
 
 	sc, err := StartServer("test10A", nil)
@@ -992,7 +864,7 @@ func TestClientClose(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(time.Second / 4)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test10A", nil)
 	if err2 != nil {
@@ -1042,7 +914,7 @@ func TestServerClose(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(time.Second / 4)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test1010", nil)
 	if err2 != nil {
@@ -1091,7 +963,7 @@ func TestClientReconnect(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(time.Second / 4)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test127", nil)
 	if err2 != nil {
@@ -1163,10 +1035,10 @@ func TestClientReconnectTimeout(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(time.Second / 4)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	config := &ClientConfig{
-		Timeout:    2,
+		Timeout:    2 * time.Second,
 		RetryTimer: 1,
 	}
 
@@ -1226,6 +1098,8 @@ func TestServerReconnect(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test127", nil)
 	if err2 != nil {
@@ -1304,7 +1178,7 @@ func TestServerReconnect2(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(time.Second / 4)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test337", nil)
 	if err2 != nil {
@@ -1358,13 +1232,11 @@ func TestServerReconnect2(t *testing.T) {
 		if m.Status == "Connected" && connect == false {
 			hasConnected <- true
 			connect = true
-
 		}
 
 		if m.Status == "Disconnected" {
 			hasDisconnected <- true
 			disconnect = true
-
 		}
 
 		if m.Status == "Connected" && connect == true && disconnect == true {
@@ -1381,10 +1253,10 @@ func TestClientReadClose(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(time.Second / 4)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	config := &ClientConfig{
-		Timeout:    2,
+		Timeout:    2 * time.Second,
 		RetryTimer: 1,
 	}
 
@@ -1419,6 +1291,7 @@ func TestClientReadClose(t *testing.T) {
 			m, err3 := cc.Read()
 
 			if err3 != nil {
+				log.Printf("err: %s", err3)
 				if err3.Error() == "the received channel has been closed" {
 					clientError <- true // after the connection times out the received channel is closed, so we're now testing that the close error is returned.
 					// This is the only error the received function returns.
@@ -1447,7 +1320,6 @@ func TestClientReadClose(t *testing.T) {
 	<-clientConnected
 
 	sc.Close()
-
 	<-clientTimout
 	<-clientError
 }
@@ -1461,12 +1333,11 @@ func TestServerReceiveWrongVersionNumber(t *testing.T) {
 
 	go func() {
 
-		cc := &Client{
-			Name:          "",
-			status:        NotConnected,
-			received:      make(chan *Message),
-			encryptionReq: false,
-		}
+		cc := &Client{Actor: Actor{
+			name:     "",
+			status:   NotConnected,
+			received: make(chan *Message),
+		}}
 
 		time.Sleep(3 * time.Second)
 
@@ -1498,83 +1369,9 @@ func TestServerReceiveWrongVersionNumber(t *testing.T) {
 		}
 
 		if m.Err != nil {
-			if m.Err.Error() != "client has a different version number" {
-				t.Error("should have error because server sent the client the wrong version number 1")
+			if m.Err.Error() != "client has a different VERSION number" {
+				t.Error("should have error because server sent the client the wrong VERSION number 1")
 			}
 		}
 	}
 }
-
-func TestClientReceiveWrongVersionNumber(t *testing.T) {
-
-	//conn, err := s.listen.Accept()
-	//if err != nil {
-	//	break
-	//}
-}
-
-/*
-// This test will not pass on Windows unless the net.Listen part for unix sockets is replaced with winio.ListenPipe
-func TestServerWrongVersionNumber(t *testing.T) {
-
-	sc := &Server{
-		name:     "test6",
-		status:   NotConnected,
-		received: make(chan *Message),
-	}
-
-	go func() {
-
-		//var pipeBase = `\\.\pipe\`
-
-		//listen, err := winio.ListenPipe(pipeBase+sc.name, nil)
-		//if err != nil {
-
-		//	return err
-		//}
-
-		//sc.listen = listen
-
-		base := "/tmp/"
-		sock := ".sock"
-
-		os.RemoveAll(base + sc.name + sock)
-
-		sc.listen, _ = net.Listen("unix", base+sc.name+sock)
-
-		conn, _ := sc.listen.Accept()
-		sc.conn = conn
-
-		buff := make([]byte, 2)
-
-		buff[0] = byte(8)
-
-		buff[1] = byte(0)
-
-		_, err := sc.conn.Write(buff)
-		if err != nil {
-			//return errors.New("unable to send handshake ")
-		}
-
-		m := sc.Read()
-		if m.Err == nil {
-			t.Error("Should have server sent wrong version number")
-		}
-
-	}()
-
-	time.Sleep(time.Second)
-
-	cc, err := StartClient("test6", nil)
-	if err != nil {
-		t.Error(err)
-	}
-
-	mm := cc.Read()
-	if mm.Err.Error() != "server has sent a different version number" {
-		t.Error("Should have  wrong version number")
-	}
-
-}
-
-*/

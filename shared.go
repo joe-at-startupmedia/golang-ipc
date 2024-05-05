@@ -1,35 +1,11 @@
 package ipc
 
-import "errors"
-
-// returns the status of the connection as a string
-func (status *Status) String() string {
-
-	switch *status {
-	case NotConnected:
-		return "Not Connected"
-	case Connecting:
-		return "Connecting"
-	case Connected:
-		return "Connected"
-	case Listening:
-		return "Listening"
-	case Closing:
-		return "Closing"
-	case ReConnecting:
-		return "Reconnecting"
-	case Timeout:
-		return "Timeout"
-	case Closed:
-		return "Closed"
-	case Error:
-		return "Error"
-	case Disconnected:
-		return "Disconnected"
-	default:
-		return "Status not found"
-	}
-}
+import (
+	"errors"
+	"github.com/sirupsen/logrus"
+	"os"
+	"strconv"
+)
 
 // checks the name passed into the start function to ensure it's ok/will work.
 func checkIpcName(ipcName string) error {
@@ -39,4 +15,33 @@ func checkIpcName(ipcName string) error {
 	}
 
 	return nil
+}
+
+func getLogrusLevel(logLevel string) logrus.Level {
+	if os.Getenv("IPC_DEBUG") == "true" {
+		return logrus.DebugLevel
+	} else {
+		switch logLevel {
+		case "debug":
+			return logrus.DebugLevel
+		case "info":
+			return logrus.InfoLevel
+		case "warn":
+			return logrus.WarnLevel
+		case "error":
+			return logrus.ErrorLevel
+		}
+	}
+	return DEFAULT_LOG_LEVEL
+}
+
+func GetDefaultClientConnectWait() int {
+	envVar := os.Getenv("IPC_CLIENT_CONNECT_WAIT")
+	if len(envVar) > 0 {
+		valInt, err := strconv.Atoi(envVar)
+		if err == nil {
+			return valInt
+		}
+	}
+	return DEFAULT_CLIENT_CONNECT_WAIT
 }

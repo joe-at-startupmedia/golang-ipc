@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"time"
 
 	ipc "github.com/joe-at-startupmedia/golang-ipc"
 )
@@ -10,11 +11,16 @@ func main() {
 
 	go server()
 
-	c, err := ipc.StartClient("example1", nil)
+	c, err := ipc.StartClient("example1", &ipc.ClientConfig{
+		Timeout:    0,
+		RetryTimer: 0,
+	})
 	if err != nil {
 		log.Println(err)
 		return
 	}
+
+	time.Sleep(time.Duration(ipc.GetDefaultClientConnectWait()) * time.Second)
 
 	for {
 
