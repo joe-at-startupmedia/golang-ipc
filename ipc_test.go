@@ -153,7 +153,7 @@ func TestWrite(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(defaultClientConnectWait)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test10", nil)
 	if err2 != nil {
@@ -195,7 +195,7 @@ func TestWrite(t *testing.T) {
 	err4 := sc.Write(2, buf)
 
 	if err4.Error() != "message exceeds maximum message length" {
-		t.Errorf("There should be an error as the data we're attempting to write is bigger than the maxMsgSize, instead we got: %s", err4)
+		t.Errorf("There should be an error as the data we're attempting to write is bigger than the MAX_MSG_SIZE, instead we got: %s", err4)
 	}
 
 	sc.status = NotConnected
@@ -215,10 +215,10 @@ func TestWrite(t *testing.T) {
 		t.Error("0 is not allowwed as a message try")
 	}
 
-	buf = make([]byte, maxMsgSize+5)
+	buf = make([]byte, MAX_MSG_SIZE+5)
 	err = cc.Write(2, buf)
 	if err == nil {
-		t.Error("There should be an error is the data we're attempting to write is bigger than the maxMsgSize")
+		t.Error("There should be an error is the data we're attempting to write is bigger than the MAX_MSG_SIZE")
 	}
 
 	cc.status = NotConnected
@@ -416,7 +416,7 @@ func TestGetConnected(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(defaultClientConnectWait)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test22", nil)
 	if err2 != nil {
@@ -440,7 +440,7 @@ func TestServerWrongMessageType(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(defaultClientConnectWait)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test333", nil)
 	if err2 != nil {
@@ -502,7 +502,7 @@ func TestClientWrongMessageType(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(defaultClientConnectWait)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test3", nil)
 	if err2 != nil {
@@ -573,7 +573,7 @@ func TestServerCorrectMessageType(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(defaultClientConnectWait)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test358", nil)
 	if err2 != nil {
@@ -641,7 +641,7 @@ func TestClientCorrectMessageType(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(defaultClientConnectWait)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test355", nil)
 	if err2 != nil {
@@ -709,7 +709,7 @@ func TestServerSendMessage(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(defaultClientConnectWait)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test377", nil)
 	if err2 != nil {
@@ -786,7 +786,7 @@ func TestClientSendMessage(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(defaultClientConnectWait)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test3661", nil)
 	if err2 != nil {
@@ -864,7 +864,7 @@ func TestClientClose(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(defaultClientConnectWait)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test10A", nil)
 	if err2 != nil {
@@ -914,7 +914,7 @@ func TestServerClose(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(defaultClientConnectWait)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test1010", nil)
 	if err2 != nil {
@@ -963,7 +963,7 @@ func TestClientReconnect(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(defaultClientConnectWait)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test127", nil)
 	if err2 != nil {
@@ -1035,7 +1035,7 @@ func TestClientReconnectTimeout(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(defaultClientConnectWait)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	config := &ClientConfig{
 		Timeout:    2 * time.Second,
@@ -1099,7 +1099,7 @@ func TestServerReconnect(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(defaultClientConnectWait)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test127", nil)
 	if err2 != nil {
@@ -1178,7 +1178,7 @@ func TestServerReconnect2(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(defaultClientConnectWait)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	cc, err2 := StartClient("test337", nil)
 	if err2 != nil {
@@ -1253,7 +1253,7 @@ func TestClientReadClose(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(defaultClientConnectWait)
+	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
 
 	config := &ClientConfig{
 		Timeout:    2 * time.Second,
@@ -1369,8 +1369,8 @@ func TestServerReceiveWrongVersionNumber(t *testing.T) {
 		}
 
 		if m.Err != nil {
-			if m.Err.Error() != "client has a different version number" {
-				t.Error("should have error because server sent the client the wrong version number 1")
+			if m.Err.Error() != "client has a different VERSION number" {
+				t.Error("should have error because server sent the client the wrong VERSION number 1")
 			}
 		}
 	}

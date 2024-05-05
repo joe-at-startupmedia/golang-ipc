@@ -7,7 +7,7 @@ import (
 )
 
 // 1st message sent from the server
-// byte 0 = protocal version no.
+// byte 0 = protocal VERSION no.
 func (sc *Server) handshake() error {
 
 	err := sc.one()
@@ -27,7 +27,7 @@ func (sc *Server) one() error {
 
 	buff := make([]byte, 1)
 
-	buff[0] = byte(version)
+	buff[0] = byte(VERSION)
 
 	_, err := sc.conn.Write(buff)
 	if err != nil {
@@ -44,7 +44,7 @@ func (sc *Server) one() error {
 	case 0:
 		return nil
 	case 1:
-		return errors.New("client has a different version number")
+		return errors.New("client has a different VERSION number")
 	}
 
 	return errors.New("other error - handshake failed")
@@ -98,9 +98,9 @@ func (cc *Client) one() error {
 		return errors.New("failed to received handshake message")
 	}
 
-	if recv[0] != version {
+	if recv[0] != VERSION {
 		cc.handshakeSendReply(1)
-		return errors.New("server has sent a different version number")
+		return errors.New("server has sent a different VERSION number")
 	}
 
 	cc.handshakeSendReply(0) // 0 is ok

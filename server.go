@@ -25,12 +25,12 @@ func StartServer(ipcName string, config *ServerConfig) (*Server, error) {
 	})}
 
 	if config == nil {
-		s.maxMsgSize = maxMsgSize
+		s.maxMsgSize = MAX_MSG_SIZE
 		s.unMask = false
 	} else {
 
 		if config.MaxMsgSize < 1024 {
-			s.maxMsgSize = maxMsgSize
+			s.maxMsgSize = MAX_MSG_SIZE
 		} else {
 			s.maxMsgSize = config.MaxMsgSize
 		}

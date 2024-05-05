@@ -3,7 +3,6 @@ package ipc
 import (
 	"errors"
 	"github.com/sirupsen/logrus"
-	"log"
 	"os"
 	"strconv"
 )
@@ -32,18 +31,17 @@ func getLogrusLevel(logLevel string) logrus.Level {
 		case "error":
 			return logrus.ErrorLevel
 		}
-		log.Println("log_level configuration is empty or invalid. Possible values include: debug, info, warn and error. using default level: info")
-		return logrus.InfoLevel
 	}
+	return DEFAULT_LOG_LEVEL
 }
 
 func GetDefaultClientConnectWait() int {
-	envVar := os.Getenv("CLIENT_WAIT_TIMEOUT")
+	envVar := os.Getenv("IPC_CLIENT_CONNECT_WAIT")
 	if len(envVar) > 0 {
 		valInt, err := strconv.Atoi(envVar)
 		if err == nil {
 			return valInt
 		}
 	}
-	return defaultClientConnectWait
+	return DEFAULT_CLIENT_CONNECT_WAIT
 }

@@ -1,8 +1,10 @@
 package ipc
 
-const version = 2 // ipc package version
+import "github.com/sirupsen/logrus"
 
-const maxMsgSize = 3145728 // 3Mb  - Maximum bytes allowed for each message
-
-// @TODO in race conditions where the client connects after the server start the connection will hang
-const defaultClientConnectWait = 2 //the amount of time to wait in seconds after starting a server before the client connects
+const (
+	VERSION                     = 2       // ipc package VERSION
+	MAX_MSG_SIZE                = 3145728 // 3Mb  - Maximum bytes allowed for each message
+	DEFAULT_CLIENT_CONNECT_WAIT = 2
+	DEFAULT_LOG_LEVEL           = logrus.ErrorLevel //
+)
