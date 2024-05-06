@@ -64,9 +64,11 @@ func (a *Actor) Read() (*Message, error) {
 	return m, nil
 }
 
-func (a *Actor) ReadTimed(duration time.Duration) (*Message, error) {
+func (a *Actor) ReadTimed(duration time.Duration, onTimeoutMessage *Message) (*Message, error) {
 
-	okChannel := make(chan bool, 1)
+	readFinished := make(chan bool, 1)
+	readMsgChan := make(chan *Message, 1)
+	readErrChan := make(chan error, 1)
 
 	go func() {
 		startTime := time.Now()
@@ -74,20 +76,38 @@ func (a *Actor) ReadTimed(duration time.Duration) (*Message, error) {
 		for {
 			<-timer.C
 			select {
-			case <-okChannel:
+			case <-readFinished:
 				return
 			default:
 				if time.Since(startTime).Seconds() > (duration).Seconds() {
-					a.dispatchErrorStr(fmt.Sprintf("%s.Read timed out", a.getRole()))
+					readMsgChan <- onTimeoutMessage
+					readErrChan <- nil
+
+					//requeue the message when the Read task does finally finish
+					<-readFinished
+					msg := <-readMsgChan
+					a.logger.Debugf("Actor.ReadTimed recycling timed-out message %s", msg.Data)
+					a.received <- msg
 					return
 				}
 			}
 		}
 	}()
 
-	m, err := a.Read()
-	okChannel <- true
-	return m, err
+	go func() {
+		m, err := a.Read()
+		readFinished <- true
+		readMsgChan <- m
+		readErrChan <- err
+	}()
+
+	err := <-readErrChan
+	if err != nil {
+		return nil, err
+	}
+
+	msg := <-readMsgChan
+	return msg, nil
 }
 
 // Write - writes a  message to the ipc connection.
