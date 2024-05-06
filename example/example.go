@@ -7,26 +7,30 @@ import (
 	ipc "github.com/joe-at-startupmedia/golang-ipc"
 )
 
+// prevents a race condition where the client attempts to connect before the server begins listening
+var serverErrorChan = make(chan error, 1)
+
 func main() {
 
 	go server()
+	err := <-serverErrorChan
 
-	c, err := ipc.StartClient("example1", &ipc.ClientConfig{
-		Timeout:    0,
-		RetryTimer: 0,
-	})
 	if err != nil {
-		log.Println(err)
-		return
+		main()
+	}
+	c, err := ipc.StartClient("example1", nil)
+	if err != nil {
+		log.Printf("client error %s:", err)
+		main()
 	}
 
 	time.Sleep(time.Duration(ipc.GetDefaultClientConnectWait()) * time.Second)
 
 	for {
 
-		message, err := c.Read()
+		message, err := c.ReadTimed(time.Second * 5)
 
-		if err == nil {
+		if err == nil && c.StatusCode() != ipc.Connecting {
 
 			if message.MsgType == -1 {
 
@@ -44,10 +48,18 @@ func main() {
 
 			}
 
+		} else if err != nil {
+			log.Println("Read err: ", err)
+			//this happens in rare edge cases when the client attempts to connect too fast after server is listening
+			if err.Error() == "Client.Read timed out" {
+				main()
+				break
+			}
+			//break
 		} else {
-			log.Println(err)
-			break
+			log.Println("client status", c.Status())
 		}
+		time.Sleep(time.Duration(ipc.GetDefaultClientConnectWait()) * time.Second)
 	}
 
 }
@@ -55,6 +67,7 @@ func main() {
 func server() {
 
 	s, err := ipc.StartServer("example1", nil)
+	serverErrorChan <- err
 	if err != nil {
 		log.Println("server error", err)
 		return
@@ -88,5 +101,4 @@ func server() {
 			break
 		}
 	}
-
 }

@@ -45,6 +45,7 @@ func NewActor(ac *ActorConfig) Actor {
 func (a *Actor) Read() (*Message, error) {
 
 	m, ok := <-a.received
+
 	if !ok {
 		err := errors.New("the received channel has been closed")
 		//a.logger.Errorf("Actor.Read err: %e", err)
@@ -52,7 +53,7 @@ func (a *Actor) Read() (*Message, error) {
 	}
 
 	if m.Err != nil {
-		a.logger.Errorf("Actor.Read err: %e", m.Err)
+		a.logger.Errorf("Actor.Read err: %s", m.Err)
 		if !a.isServer {
 			close(a.received)
 			close(a.toWrite)
@@ -61,6 +62,32 @@ func (a *Actor) Read() (*Message, error) {
 	}
 
 	return m, nil
+}
+
+func (a *Actor) ReadTimed(duration time.Duration) (*Message, error) {
+
+	okChannel := make(chan bool, 1)
+
+	go func() {
+		startTime := time.Now()
+		timer := time.NewTicker(time.Second * 1)
+		for {
+			<-timer.C
+			select {
+			case <-okChannel:
+				return
+			default:
+				if time.Since(startTime).Seconds() > (duration).Seconds() {
+					a.dispatchErrorStr(fmt.Sprintf("%s.Read timed out", a.getRole()))
+					return
+				}
+			}
+		}
+	}()
+
+	m, err := a.Read()
+	okChannel <- true
+	return m, err
 }
 
 // Write - writes a  message to the ipc connection.
@@ -78,8 +105,11 @@ func (a *Actor) Write(msgType int, message []byte) error {
 		a.logger.Infoln("Server is still listening so lets use recursion")
 		//it's possible the client hasn't connected yet so retry it
 		return a.Write(msgType, message)
-	}
-	if a.status != Connected {
+	} else if !a.isServer && a.status == Connecting {
+		a.logger.Infoln("Client is still connecting so lets use recursion")
+		time.Sleep(time.Millisecond * 100)
+		return a.Write(msgType, message)
+	} else if a.status != Connected {
 		err := errors.New(fmt.Sprintf("cannot write under current status: %s", a.status.String()))
 		a.logger.Errorf("Actor.Write err: %s", err)
 		return err
@@ -110,11 +140,17 @@ func (a *Actor) write() {
 		toSend := append(intToBytes(m.MsgType), m.Data...)
 		writer := bufio.NewWriter(a.conn)
 		//first send the message size
-		writer.Write(intToBytes(len(toSend)))
+		_, err := writer.Write(intToBytes(len(toSend)))
+		if err != nil {
+			a.logger.Errorf("error writing message size: %s", err)
+		}
 		//last send the message
-		writer.Write(toSend)
+		_, err = writer.Write(toSend)
+		if err != nil {
+			a.logger.Errorf("error writing message: %s", err)
+		}
 
-		err := writer.Flush()
+		err = writer.Flush()
 		if err != nil {
 			a.logger.Errorf("error flushing data: %s", err)
 			continue
@@ -122,6 +158,29 @@ func (a *Actor) write() {
 
 		time.Sleep(2 * time.Millisecond)
 
+	}
+}
+
+func (a *Actor) dispatchStatus(status Status) {
+	a.logger.Debugf("Actor.dispacthStatus(%s): %s", a.getRole(), a.Status())
+	a.status = status
+	a.received <- &Message{Status: a.Status(), MsgType: -1}
+}
+
+func (a *Actor) dispatchErrorStr(err string) {
+	a.dispatchError(errors.New(err))
+}
+
+func (a *Actor) dispatchError(err error) {
+	a.logger.Debugf("Actor.dispacthError(%s): %s", a.getRole(), err)
+	a.received <- &Message{Err: err, MsgType: -1}
+}
+
+func (a *Actor) getRole() string {
+	if a.isServer {
+		return "Server"
+	} else {
+		return "Client"
 	}
 }
 

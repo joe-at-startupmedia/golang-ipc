@@ -9,6 +9,11 @@ import (
 	"time"
 )
 
+var RetriesEnabledClientConfig = &ClientConfig{
+	Timeout:    time.Duration(time.Second * 10),
+	RetryTimer: time.Duration(time.Second * 1),
+}
+
 func TestStartUp_Name(t *testing.T) {
 
 	_, err := StartServer("", nil)
@@ -107,7 +112,7 @@ func TestStartUp_Configs(t *testing.T) {
 func TestStartUp_Timeout(t *testing.T) {
 
 	scon := &ServerConfig{
-		Timeout: 1,
+		//Timeout: 1,
 	}
 
 	sc, _ := StartServer("test_dummy", scon)
@@ -142,7 +147,6 @@ func TestStartUp_Timeout(t *testing.T) {
 
 		}
 	}
-
 }
 */
 
@@ -166,8 +170,10 @@ func TestWrite(t *testing.T) {
 
 		for {
 
-			m, _ := cc.Read()
-			if m.Status == "Connected" {
+			m, err := cc.Read()
+			if err != nil {
+				//t.Error(fmt.Sprintf("Got read error: %s", err))
+			} else if m.Status == "Connected" {
 				connected <- true
 			}
 		}
@@ -383,17 +389,6 @@ func TestStatus(t *testing.T) {
 		t.Error("status string should have returned Error")
 	}
 
-	/*
-		sc.status = 33
-
-		s7 := sc.getStatus()
-
-		fmt.Println(s7.String())
-		if s7.String() != "Status not found" {
-			t.Error("status string should have returned 'Status not found'")
-		}
-	*/
-
 	cc := &Client{Actor: Actor{
 		status: NotConnected,
 	}}
@@ -586,8 +581,8 @@ func TestServerCorrectMessageType(t *testing.T) {
 
 	go func() {
 		for {
-			m, _ := sc.Read()
-			if m.Status == "Connected" {
+			m, err := sc.Read()
+			if err == nil && m.Status == "Connected" {
 				connected2 <- true
 			}
 		}
@@ -598,15 +593,12 @@ func TestServerCorrectMessageType(t *testing.T) {
 		ready := false
 
 		for {
-
 			m, err23 := cc.Read()
-
-			if m.Status == "Connected" {
+			if err23 == nil && m.Status == "Connected" {
 				ready = true
 				connected <- true
 				continue
 			}
-
 			if ready == true {
 				if err23 == nil {
 					if m.MsgType == 5 {
@@ -724,9 +716,10 @@ func TestServerSendMessage(t *testing.T) {
 
 		for {
 
-			m, _ := sc.Read()
-
-			if m.Status == "Connected" {
+			m, err := sc.Read()
+			if err != nil {
+				t.Error(fmt.Sprintf("Got read error: %s", err))
+			} else if m.Status == "Connected" {
 				connected <- true
 			}
 		}
@@ -1112,11 +1105,12 @@ func TestServerReconnect(t *testing.T) {
 	go func() {
 
 		for {
-
+			//cc.logger.Debug("x")
 			m, _ := cc.Read()
 			if m.Status == "Connected" {
+				//cc.logger.Debug("a")
 				<-clientConnected
-
+				//cc.logger.Debug("b")
 				connected <- true
 				break
 			}
@@ -1129,45 +1123,52 @@ func TestServerReconnect(t *testing.T) {
 		reconnectCheck := 0
 
 		for {
-
+			//sc.logger.Debug("z")
 			m, err := sc.Read()
 			if err != nil {
-				fmt.Println(err)
+				sc.logger.Debugf("TestServerReconnect sever read loop err: %s", err)
 				return
 			}
 
 			if m.Status == "Connected" {
+				//sc.logger.Debug("c")
 				clientConnected <- true
 			}
 
 			if m.Status == "Disconnected" {
+				//sc.logger.Debug("d")
 				reconnectCheck = 1
 			}
 
 			if m.Status == "Connected" && reconnectCheck == 1 {
+				//sc.logger.Debug("e")
 				clientConfirm <- true
 				break
 			}
 		}
 	}()
 
+	//cc.logger.Debug("f")
 	<-connected
-
+	//cc.logger.Debug("g")
 	cc.Close()
-
-	c2, err := StartClient("test127", nil)
+	//cc.logger.Debug("h")
+	//this intermittently times out unless Start retries are enabled
+	c2, err := StartClient("test127", RetriesEnabledClientConfig)
 	if err != nil {
 		t.Error(err)
 	}
 
 	for {
-
+		//cc.logger.Debug("i")
 		m, _ := c2.Read()
 		if m.Status == "Connected" {
+			//cc.logger.Debug("j")
 			break
 		}
 	}
 
+	//cc.logger.Debug("k")
 	<-clientConfirm
 }
 

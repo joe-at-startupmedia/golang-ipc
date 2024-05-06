@@ -1,7 +1,6 @@
 package ipc
 
 import (
-	"errors"
 	"io"
 	"net"
 	"os"
@@ -75,7 +74,6 @@ func (s *Server) run() error {
 	s.status = Listening
 
 	return nil
-
 }
 
 func (s *Server) acceptLoop() {
@@ -94,7 +92,7 @@ func (s *Server) acceptLoop() {
 			err2 := s.handshake()
 			if err2 != nil {
 				s.logger.Errorf("Server.acceptLoop handshake err: %s", err2)
-				s.received <- &Message{Err: err2, MsgType: -1}
+				s.dispatchError(err2)
 				s.status = Error
 				s.listen.Close()
 				s.conn.Close()
@@ -104,14 +102,10 @@ func (s *Server) acceptLoop() {
 				go s.read()
 				go s.write()
 
-				s.status = Connected
-				s.received <- &Message{Status: s.status.String(), MsgType: -1}
+				s.dispatchStatus(Connected)
 			}
-
 		}
-
 	}
-
 }
 
 func (a *Server) read() {
@@ -148,19 +142,15 @@ func (s *Server) readData(buff []byte) bool {
 
 		if s.status == Closing {
 
-			s.status = Closed
-			s.received <- &Message{Status: s.status.String(), MsgType: -1}
-			s.received <- &Message{Err: errors.New("server has closed the connection"), MsgType: -1}
+			s.dispatchStatus(Closed)
+			s.dispatchErrorStr("server has closed the connection")
 			return false
 		}
 
 		if err == io.EOF {
-
-			s.status = Disconnected
-			s.received <- &Message{Status: s.status.String(), MsgType: -1}
+			s.dispatchStatus(Disconnected)
 			return false
 		}
-
 	}
 
 	return true

@@ -103,9 +103,7 @@ func (cc *Client) one() error {
 		return errors.New("server has sent a different VERSION number")
 	}
 
-	cc.handshakeSendReply(0) // 0 is ok
-
-	return nil
+	return cc.handshakeSendReply(0)
 }
 
 func (cc *Client) msgLength() error {
@@ -118,7 +116,10 @@ func (cc *Client) msgLength() error {
 	}
 
 	var msgLen uint32
-	binary.Read(bytes.NewReader(buff), binary.BigEndian, &msgLen) // message length
+	err = binary.Read(bytes.NewReader(buff), binary.BigEndian, &msgLen) // message length
+	if err != nil {
+		return errors.New("failed to read binary")
+	}
 
 	buff = make([]byte, int(msgLen))
 
@@ -128,18 +129,20 @@ func (cc *Client) msgLength() error {
 	}
 
 	var maxMsgSize uint32
-	binary.Read(bytes.NewReader(buff), binary.BigEndian, &maxMsgSize) // message length
+	err = binary.Read(bytes.NewReader(buff), binary.BigEndian, &maxMsgSize) // message length
+	if err != nil {
+		return errors.New("failed to read binary")
+	}
 
 	cc.maxMsgSize = int(maxMsgSize)
-	cc.handshakeSendReply(0)
-
-	return nil
+	return cc.handshakeSendReply(0)
 }
 
-func (cc *Client) handshakeSendReply(result byte) {
+func (cc *Client) handshakeSendReply(result byte) error {
 
 	buff := make([]byte, 1)
 	buff[0] = result
 
-	cc.conn.Write(buff)
+	_, err := cc.conn.Write(buff)
+	return err
 }
