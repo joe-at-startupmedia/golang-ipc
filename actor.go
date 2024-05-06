@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+var TimeoutMessage = &Message{MsgType: 2, Err: errors.New("timed_out")}
+
 func NewActor(ac *ActorConfig) Actor {
 
 	logger := logrus.New()

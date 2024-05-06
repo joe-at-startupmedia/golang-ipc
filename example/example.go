@@ -28,7 +28,7 @@ func main() {
 
 	for {
 
-		message, err := c.ReadTimed(time.Second * 5)
+		message, err := c.ReadTimed(time.Second*5, ipc.TimeoutMessage)
 
 		if err == nil && c.StatusCode() != ipc.Connecting {
 
