@@ -1,7 +1,9 @@
 package ipc
 
 import (
+	"bufio"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"strings"
@@ -12,16 +14,51 @@ import (
 // ipcName = is the name of the unix socket or named pipe that the client will try and connect to.
 func StartClient(ipcName string, config *ClientConfig) (*Client, error) {
 
-	err := checkIpcName(ipcName)
+	cm, err := NewClient(ipcName+"_manager", config)
+	if err != nil {
+		return nil, err
+	}
+	cm, err = start(cm)
+	if err != nil {
+		return nil, err
+	}
+
+	cm.Write(CLIENT_CONNECT_MSGTYPE, []byte("client_id_request"))
+
+	for {
+		message, err := cm.Read()
+
+		msgType := message.MsgType
+		msgData := bytesToInt(message.Data)
+
+		if err == nil && msgType == CLIENT_CONNECT_MSGTYPE && msgData > 0 {
+
+			cm.logger.Infof("Attempting to create a new Client %d, %s", msgData, message.Data)
+
+			cc, err := NewClient(ipcName, config)
+			if err != nil {
+				return nil, err
+			}
+			cc.clientId = msgData
+			cm.Close()
+			return start(cc)
+		}
+	}
+}
+
+func NewClient(name string, config *ClientConfig) (*Client, error) {
+	err := checkIpcName(name)
 	if err != nil {
 		return nil, err
 
 	}
 
-	cc := &Client{Actor: NewActor(&ActorConfig{
-		Name:         ipcName,
-		ClientConfig: config,
-	})}
+	cc := &Client{
+		Actor: NewActor(&ActorConfig{
+			Name:         name,
+			ClientConfig: config,
+		}),
+	}
 
 	if config == nil {
 
@@ -42,11 +79,18 @@ func StartClient(ipcName string, config *ClientConfig) (*Client, error) {
 		}
 	}
 
-	return start(cc)
+	return cc, err
+}
+
+func (c *Client) getSocketName() string {
+	if c.clientId > 0 {
+		return fmt.Sprintf("%s%s%d%s", SOCKET_NAME_BASE, c.name, c.clientId, SOCKET_NAME_EXT)
+	} else {
+		return fmt.Sprintf("%s%s%s", SOCKET_NAME_BASE, c.name, SOCKET_NAME_EXT)
+	}
 }
 
 func start(c *Client) (*Client, error) {
-
 	go c.dispatchStatus(Connecting)
 
 	if c.timeout != 0 {
@@ -91,6 +135,7 @@ func start(c *Client) (*Client, error) {
 		}
 	} else {
 		err := c.dial()
+
 		if err != nil {
 			c.dispatchError(err)
 			return c, err
@@ -99,17 +144,46 @@ func start(c *Client) (*Client, error) {
 
 	go c.read()
 	go c.write()
-
 	go c.dispatchStatus(Connected)
 
 	return c, nil
 }
 
+func (a *Client) write() {
+
+	for {
+
+		m, ok := <-a.toWrite
+
+		if !ok {
+			break
+		}
+
+		toSend := append(intToBytes(m.MsgType), m.Data...)
+		writer := bufio.NewWriter(a.conn)
+		//first send the message size
+		_, err := writer.Write(intToBytes(len(toSend)))
+		if err != nil {
+			a.logger.Errorf("error writing message size: %s", err)
+		}
+		//last send the message
+		_, err = writer.Write(toSend)
+		if err != nil {
+			a.logger.Errorf("error writing message: %s", err)
+		}
+
+		err = writer.Flush()
+		if err != nil {
+			a.logger.Errorf("error flushing data: %s", err)
+			continue
+		}
+
+		time.Sleep(2 * time.Millisecond)
+	}
+}
+
 // Client connect to the unix socket created by the server -  for unix and linux
 func (c *Client) dial() error {
-
-	base := "/tmp/"
-	sock := ".sock"
 
 	startTime := time.Now()
 
@@ -124,21 +198,23 @@ func (c *Client) dial() error {
 				return errors.New("timed out trying to connect")
 			}
 		}
-
-		conn, err := net.Dial("unix", base+c.name+sock)
+		conn, err := net.Dial("unix", c.getSocketName())
 		if err != nil {
 			c.logger.Debugf("Client.dial err: %s", err)
 			//connect: no such file or directory happens a lot when the client connection closes under normal circumstances
 			if !strings.Contains(err.Error(), "connect: no such file or directory") &&
 				!strings.Contains(err.Error(), "connect: connection refused") {
 				c.dispatchError(err)
+
+			} else {
+				time.Sleep(time.Second * 1)
 			}
 
 		} else {
 
 			c.conn = conn
 
-			err = c.handshake()
+			err = c.handshake(&conn)
 			if err != nil {
 				c.logger.Errorf("Client.dial handshake err: %s", err)
 				return err
@@ -224,4 +300,30 @@ func (c *Client) reconnect() {
 	c.dispatchStatus(Connected)
 
 	go c.read()
+}
+
+// Close - closes the connection
+func (a *Client) Close() {
+
+	a.status = Closing
+
+	if a.conn != nil {
+		a.conn.Close()
+	}
+}
+
+// getStatus - get the current status of the connection
+func (c *Client) String() string {
+	return fmt.Sprintf("Client(%d)", c.clientId)
+}
+
+func (a *Client) dispatchStatus(status Status) {
+	a.logger.Debugf("Actor.dispacthStatus(%s): %s", a.String(), a.Status())
+	a.status = status
+	a.received <- &Message{Status: a.Status(), MsgType: -1}
+}
+
+func (a *Client) dispatchError(err error) {
+	a.logger.Debugf("Actor.dispacthError(%s): %s", a.String(), err)
+	a.received <- &Message{Err: err, MsgType: -1}
 }

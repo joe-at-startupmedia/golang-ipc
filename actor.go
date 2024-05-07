@@ -11,6 +11,10 @@ import (
 
 var TimeoutMessage = &Message{MsgType: 2, Err: errors.New("timed_out")}
 
+type ActorInterface interface {
+	String() string
+}
+
 func NewActor(ac *ActorConfig) Actor {
 
 	logger := logrus.New()
@@ -149,7 +153,7 @@ func (a *Actor) Write(msgType int, message []byte) error {
 	return nil
 }
 
-func (a *Actor) write() {
+func (a *Server) write() {
 
 	for {
 
@@ -220,14 +224,4 @@ func (a *Actor) StatusCode() Status {
 func (a *Actor) Status() string {
 
 	return a.status.String()
-}
-
-// Close - closes the connection
-func (a *Actor) Close() {
-
-	a.status = Closing
-
-	if a.conn != nil {
-		a.conn.Close()
-	}
 }

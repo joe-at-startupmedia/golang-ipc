@@ -8,8 +8,8 @@ import (
 
 type Actor struct {
 	name       string
-	conn       net.Conn
 	status     Status
+	conn       net.Conn
 	received   chan (*Message)
 	toWrite    chan (*Message)
 	maxMsgSize int
@@ -20,8 +20,9 @@ type Actor struct {
 // Server - holds the details of the server connection & config.
 type Server struct {
 	Actor
-	listen net.Listener
-	unMask bool
+	listener      net.Listener
+	unMask        bool
+	ServerManager *ServerManager
 }
 
 // Client - holds the details of the client connection and config.
@@ -29,6 +30,37 @@ type Client struct {
 	Actor
 	timeout    time.Duration //
 	retryTimer time.Duration // number of seconds before trying to connect again
+	clientId   int
+}
+
+type ActorConfig struct {
+	Name         string
+	MaxMsgSize   int
+	IsServer     bool
+	ServerConfig *ServerConfig
+	ClientConfig *ClientConfig
+}
+
+// ServerConfig - used to pass configuation overrides to ServerStart()
+type ServerConfig struct {
+	Name              string
+	MaxMsgSize        int
+	UnmaskPermissions bool
+	LogLevel          string
+}
+
+// ClientConfig - used to pass configuation overrides to ClientStart()
+type ClientConfig struct {
+	Name       string
+	Timeout    time.Duration
+	RetryTimer time.Duration
+	LogLevel   string
+}
+
+type ServerManager struct {
+	Servers      []*Server
+	ServerConfig *ServerConfig
+	Logger       *logrus.Logger
 }
 
 // Message - contains the received message
@@ -79,26 +111,4 @@ func (status Status) String() string {
 		"Timeout",
 		"Disconnected",
 	}[status]
-}
-
-type ActorConfig struct {
-	Name         string
-	MaxMsgSize   int
-	IsServer     bool
-	ServerConfig *ServerConfig
-	ClientConfig *ClientConfig
-}
-
-// ServerConfig - used to pass configuation overrides to ServerStart()
-type ServerConfig struct {
-	MaxMsgSize        int
-	UnmaskPermissions bool
-	LogLevel          string
-}
-
-// ClientConfig - used to pass configuation overrides to ClientStart()
-type ClientConfig struct {
-	Timeout    time.Duration
-	RetryTimer time.Duration
-	LogLevel   string
 }
