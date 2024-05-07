@@ -198,7 +198,7 @@ func (s *Server) acceptLoop(clientId int) {
 
 			} else {
 
-				go s.read()
+				go s.read(s.ByteReader)
 				go s.write()
 
 				s.dispatchStatus(Connected)
@@ -208,50 +208,20 @@ func (s *Server) acceptLoop(clientId int) {
 	}
 }
 
-func (a *Server) read() {
-	bLen := make([]byte, 4)
+func (s *Server) ByteReader(a *Actor, buff []byte) bool {
 
-	for {
-		res := a.readData(bLen)
-		if !res {
-			break
-		}
-
-		mLen := bytesToInt(bLen)
-
-		msgRecvd := make([]byte, mLen)
-
-		res = a.readData(msgRecvd)
-		if !res {
-			break
-		}
-
-		msgType := bytesToInt(msgRecvd[:4])
-		msgData := msgRecvd[4:]
-
-		if msgType == 0 {
-			//  type 0 = control message
-			a.logger.Debugf("Server.read - control message encountered")
-		} else {
-			a.received <- &Message{Data: msgData, MsgType: msgType}
-		}
-	}
-}
-
-func (s *Server) readData(buff []byte) bool {
-
-	_, err := io.ReadFull(s.conn, buff)
+	_, err := io.ReadFull(a.conn, buff)
 	if err != nil {
 
-		if s.status == Closing {
+		if a.status == Closing {
 
-			s.dispatchStatus(Closed)
-			s.dispatchErrorStr("server has closed the connection")
+			a.dispatchStatus(Closed)
+			a.dispatchErrorStr("server has closed the connection")
 			return false
 		}
 
 		if err == io.EOF {
-			s.dispatchStatus(Disconnected)
+			a.dispatchStatus(Disconnected)
 			return false
 		}
 	}

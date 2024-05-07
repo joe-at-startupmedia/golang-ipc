@@ -52,13 +52,16 @@ func NewClient(name string, config *ClientConfig) (*Client, error) {
 		return nil, err
 
 	}
+	actor := NewActor(&ActorConfig{
+		Name:         name,
+		ClientConfig: config,
+	})
 
 	cc := &Client{
-		Actor: NewActor(&ActorConfig{
-			Name:         name,
-			ClientConfig: config,
-		}),
+		Actor: actor,
 	}
+
+	actor.Client = cc
 
 	if config == nil {
 
@@ -142,7 +145,7 @@ func start(c *Client) (*Client, error) {
 		}
 	}
 
-	go c.read()
+	go c.read(c.ByteReader)
 	go c.write()
 	go c.dispatchStatus(Connected)
 
@@ -227,49 +230,22 @@ func (c *Client) dial() error {
 	}
 }
 
-func (a *Client) read() {
-	bLen := make([]byte, 4)
+func (c *Client) ByteReader(a *Actor, buff []byte) bool {
 
-	for {
-		res := a.readData(bLen)
-		if !res {
-			break
-		}
-
-		mLen := bytesToInt(bLen)
-
-		msgRecvd := make([]byte, mLen)
-
-		res = a.readData(msgRecvd)
-		if !res {
-			break
-		}
-
-		if bytesToInt(msgRecvd[:4]) == 0 {
-			//  type 0 = control message
-			a.logger.Debugf("Client.read - control message encountered")
-		} else {
-			a.received <- &Message{Data: msgRecvd[4:], MsgType: bytesToInt(msgRecvd[:4])}
-		}
-	}
-}
-
-func (c *Client) readData(buff []byte) bool {
-
-	_, err := io.ReadFull(c.conn, buff)
+	_, err := io.ReadFull(a.conn, buff)
 	if err != nil {
-		c.logger.Debugf("Client.readData err: %s", err)
+		a.logger.Debugf("Client.readData err: %s", err)
 		if c.status == Closing {
-			c.dispatchStatus(Closed)
-			c.dispatchErrorStr("client has closed the connection")
+			a.dispatchStatus(Closed)
+			a.dispatchErrorStr("client has closed the connection")
 			return false
 		}
 
 		if err == io.EOF { // the connection has been closed by the client.
-			c.conn.Close()
+			a.conn.Close()
 
-			if c.status != Closing {
-				go c.reconnect()
+			if a.status != Closing {
+				go a.Client.reconnect()
 			}
 			return false
 		}
@@ -299,7 +275,7 @@ func (c *Client) reconnect() {
 
 	c.dispatchStatus(Connected)
 
-	go c.read()
+	go c.read(c.ByteReader)
 }
 
 // Close - closes the connection

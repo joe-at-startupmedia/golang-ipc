@@ -153,6 +153,36 @@ func (a *Actor) Write(msgType int, message []byte) error {
 	return nil
 }
 
+func (a *Actor) read(readBytesCb func(*Actor, []byte) bool) {
+	bLen := make([]byte, 4)
+
+	for {
+		res := readBytesCb(a, bLen)
+		if !res {
+			break
+		}
+
+		mLen := bytesToInt(bLen)
+
+		msgRecvd := make([]byte, mLen)
+
+		res = readBytesCb(a, msgRecvd)
+		if !res {
+			break
+		}
+
+		msgType := bytesToInt(msgRecvd[:4])
+		msgData := msgRecvd[4:]
+
+		if msgType == 0 {
+			//  type 0 = control message
+			a.logger.Debugf("Server.read - control message encountered")
+		} else {
+			a.received <- &Message{Data: msgData, MsgType: msgType}
+		}
+	}
+}
+
 func (a *Server) write() {
 
 	for {
