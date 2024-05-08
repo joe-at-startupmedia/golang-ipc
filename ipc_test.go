@@ -1380,7 +1380,7 @@ func TestServerReceiveWrongVersionNumber(t *testing.T) {
 		}
 
 		time.Sleep(3 * time.Second)
-		cc.clientId = 1
+		cc.ClientId = 1
 		conn, err := net.Dial("unix", cc.getSocketName())
 		if err != nil {
 			t.Error(err)

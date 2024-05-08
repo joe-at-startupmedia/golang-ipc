@@ -253,7 +253,7 @@ func (c *Client) ByteReader(a *Actor, buff []byte) bool {
 			a.conn.Close()
 
 			if a.status != Closing {
-				go a.ClientRef.reconnect(c)
+				go reconnect(c)
 			}
 			return false
 		}
@@ -265,7 +265,7 @@ func (c *Client) ByteReader(a *Actor, buff []byte) bool {
 	return true
 }
 
-func (b *Client) reconnect(c *Client) {
+func reconnect(c *Client) {
 
 	c.logger.Warn("Client.reconnect called")
 	c.dispatchStatus(ReConnecting)
