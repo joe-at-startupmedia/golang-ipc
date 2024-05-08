@@ -1277,8 +1277,6 @@ func TestServerReconnect2(t *testing.T) {
 			})
 		}
 	}
-	sc.Close()
-	cc.Close()
 }
 
 func TestServerReconnectMulti(t *testing.T) {
@@ -1468,8 +1466,6 @@ func TestServerReconnect2Mutli(t *testing.T) {
 			})
 		}
 	}
-	sc.Close()
-	cc.Close()
 }
 
 func TestClientReadClose(t *testing.T) {
