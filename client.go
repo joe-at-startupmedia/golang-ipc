@@ -45,7 +45,7 @@ func StartClient(config *ClientConfig) (*Client, error) {
 			if err != nil {
 				return nil, err
 			}
-			cc.clientId = msgData
+			cc.ClientId = msgData
 			cm.Close()
 			return start(cc)
 		} else {
@@ -94,8 +94,8 @@ func NewClient(name string, config *ClientConfig) (*Client, error) {
 }
 
 func (c *Client) getSocketName() string {
-	if c.clientId > 0 {
-		return fmt.Sprintf("%s%s%d%s", SOCKET_NAME_BASE, c.name, c.clientId, SOCKET_NAME_EXT)
+	if c.ClientId > 0 {
+		return fmt.Sprintf("%s%s%d%s", SOCKET_NAME_BASE, c.name, c.ClientId, SOCKET_NAME_EXT)
 	} else {
 		return fmt.Sprintf("%s%s%s", SOCKET_NAME_BASE, c.name, SOCKET_NAME_EXT)
 	}
@@ -298,7 +298,7 @@ func (a *Client) Close() {
 
 // getStatus - get the current status of the connection
 func (c *Client) String() string {
-	return fmt.Sprintf("Client(%d)", c.clientId)
+	return fmt.Sprintf("Client(%d)", c.ClientId)
 }
 
 func (a *Client) dispatchStatus(status Status) {

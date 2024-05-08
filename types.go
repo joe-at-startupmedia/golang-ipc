@@ -31,7 +31,7 @@ type Client struct {
 	Actor
 	timeout    time.Duration //
 	retryTimer time.Duration // number of seconds before trying to connect again
-	clientId   int
+	ClientId   int
 }
 
 type ActorConfig struct {

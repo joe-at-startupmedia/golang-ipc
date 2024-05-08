@@ -111,7 +111,7 @@ func (cc *Client) one(conn net.Conn) error {
 		return errors.New("server has sent a different VERSION number")
 	} else if clientId > 0 {
 		cc.logger.Infof("Setting clientId: %d: ", clientId)
-		cc.clientId = clientId
+		cc.ClientId = clientId
 	}
 
 	return cc.handshakeSendReply(conn, 0)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"time"
 
@@ -12,14 +13,14 @@ var serverErrorChan = make(chan error, 1)
 
 func main() {
 
-	go serverReadTimed()
+	go server()
 	err := <-serverErrorChan
 	if err != nil {
 		log.Printf("server error %s:", err)
 		main()
 	}
 
-	//wait for server to connect
+	//change the sleep time by using IPC_CLIENT_CONNECT_WAIT env variable (seconds)
 	time.Sleep(time.Duration(ipc.GetDefaultClientConnectWait()) * time.Second)
 
 	clientConfig := &ipc.ClientConfig{Name: "example1"}
@@ -38,21 +39,34 @@ func main() {
 		main()
 	}
 
-	serverPinger(c2)
+	serverPonger(c2, false)
 
-	time.Sleep(time.Second * 10)
+	time.Sleep(time.Duration(ipc.GetDefaultClientConnectWait()) * time.Second)
 
-	serverPinger(c1)
+	serverPonger(c1, false)
 
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Duration(ipc.GetDefaultClientConnectWait()) * time.Second)
+
+	serverPonger(c2, true)
+
+	time.Sleep(time.Duration(ipc.GetDefaultClientConnectWait()) * time.Second)
 }
 
-func serverPinger(c *ipc.Client) {
+func serverPonger(c *ipc.Client, autosend bool) {
+
+	pongMessage := fmt.Sprintf("Message from client(%d) - PONG", c.ClientId)
+
+	if autosend {
+		c.Write(5, []byte(pongMessage))
+	}
+
 	for {
 
 		message, err := c.ReadTimed(5*time.Second, ipc.TimeoutMessage)
 
 		if err == nil && c.StatusCode() != ipc.Connecting {
+
+			//log.Printf("Client(%d) received: %s - Message type: %d, Message Status %s", c.ClientId, string(message.Data), message.MsgType, message.Status)
 
 			if message.MsgType == -1 {
 
@@ -61,12 +75,13 @@ func serverPinger(c *ipc.Client) {
 				if message.Status == "Reconnecting" {
 					c.Close()
 					return
+				} else if message.Status == "Connected" {
+					c.Write(5, []byte(pongMessage))
 				}
 
-			} else {
+			} else if message != ipc.TimeoutMessage {
 
-				log.Println("Client received: "+string(message.Data)+" - Message type: ", message.MsgType)
-				c.Write(5, []byte("Message from client - PING"))
+				log.Printf("Client(%d) received: %s - Message type: %d", c.ClientId, string(message.Data), message.MsgType)
 				break
 			}
 
@@ -86,7 +101,7 @@ func serverPinger(c *ipc.Client) {
 
 }
 
-func serverRead() {
+func server() {
 
 	srv, err := ipc.StartServer(&ipc.ServerConfig{Name: "example1"})
 	serverErrorChan <- err
@@ -98,47 +113,8 @@ func serverRead() {
 	//log.Println("server status", srv.Status())
 
 	for {
-		log.Println("server status loop", srv.Status())
-		srv.ServerManager.Read(func(s *ipc.Server, message *ipc.Message, err error) {
-			if err == nil {
-
-				if message.MsgType == -1 {
-
-					if message.Status == "Connected" {
-
-						log.Println("server status", s.Status())
-						s.Write(1, []byte("server - PONG"))
-
-					}
-
-				} else {
-
-					log.Println("Server received: "+string(message.Data)+" - Message type: ", message.MsgType)
-					log.Printf("ServerManager server length: %d", len(srv.ServerManager.Servers))
-					//s.Close()
-					//return
-				}
-
-			} else {
-				log.Println("Read err: ", err)
-			}
-		})
-	}
-}
-
-func serverReadTimed() {
-
-	srv, err := ipc.StartServer(&ipc.ServerConfig{Name: "example1"})
-	serverErrorChan <- err
-	if err != nil {
-		log.Println("server error", err)
-		return
-	}
-
-	//log.Println("server status", srv.Status())
-
-	for {
-		log.Println("server status loop", srv.Status())
+		//log.Println("server status loop", srv.Status())
+		// we need to use the ReadTimed in order to poll all new clients
 		srv.ServerManager.ReadTimed(5*time.Second, ipc.TimeoutMessage, func(s *ipc.Server, message *ipc.Message, err error) {
 			if err == nil {
 
@@ -146,14 +122,15 @@ func serverReadTimed() {
 
 					if message.Status == "Connected" {
 
-						log.Println("server status", s.Status())
-						s.Write(1, []byte("server - PONG"))
+						log.Println("server sending ping: status", s.Status())
+						s.Write(1, []byte("server - PING"))
 
 					}
 
 				} else if message != ipc.TimeoutMessage {
 
 					log.Println("Server received: "+string(message.Data)+" - Message type: ", message.MsgType)
+					s.Write(1, []byte("server - PING"))
 				}
 
 			} else {
