@@ -208,7 +208,7 @@ func (s *Server) acceptLoop() {
 
 			s.conn = conn
 
-			err2 := s.handshake(&conn)
+			err2 := s.handshake()
 			if err2 != nil {
 				s.logger.Errorf("Server.acceptLoop handshake err: %s", err2)
 				s.dispatchError(err2)

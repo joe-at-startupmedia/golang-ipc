@@ -4,19 +4,18 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"net"
 )
 
 // 1st message sent from the server
 // byte 0 = protocal VERSION no.
-func (sc *Server) handshake(conn *net.Conn) error {
+func (sc *Server) handshake() error {
 
-	err := sc.one(*conn)
+	err := sc.one()
 	if err != nil {
 		return err
 	}
 
-	err = sc.msgLength(*conn)
+	err = sc.msgLength()
 	if err != nil {
 		return err
 	}
@@ -24,18 +23,18 @@ func (sc *Server) handshake(conn *net.Conn) error {
 	return nil
 }
 
-func (sc *Server) one(conn net.Conn) error {
+func (sc *Server) one() error {
 
 	buff := make([]byte, 1)
 
 	buff[0] = byte(VERSION)
-	_, err := conn.Write(buff)
+	_, err := sc.conn.Write(buff)
 	if err != nil {
 		return errors.New("unable to send handshake ")
 	}
 
 	recv := make([]byte, 1)
-	_, err = conn.Read(recv)
+	_, err = sc.conn.Read(recv)
 	if err != nil {
 		return errors.New("failed to received handshake reply")
 	}
@@ -50,7 +49,7 @@ func (sc *Server) one(conn net.Conn) error {
 	return errors.New("other error - handshake failed")
 }
 
-func (sc *Server) msgLength(conn net.Conn) error {
+func (sc *Server) msgLength() error {
 
 	buff := make([]byte, 4)
 	binary.BigEndian.PutUint32(buff, uint32(sc.config.ServerConfig.MaxMsgSize))
@@ -59,14 +58,14 @@ func (sc *Server) msgLength(conn net.Conn) error {
 	binary.BigEndian.PutUint32(toSend, uint32(len(buff)))
 	toSend = append(toSend, buff...)
 
-	_, err := conn.Write(toSend)
+	_, err := sc.conn.Write(toSend)
 	if err != nil {
 		return errors.New("unable to send max message length ")
 	}
 
 	reply := make([]byte, 1)
 
-	_, err = conn.Read(reply)
+	_, err = sc.conn.Read(reply)
 	if err != nil {
 		return errors.New("did not received message length reply")
 	}
@@ -75,14 +74,14 @@ func (sc *Server) msgLength(conn net.Conn) error {
 }
 
 // 1st message received by the client
-func (cc *Client) handshake(conn *net.Conn) error {
+func (cc *Client) handshake() error {
 
-	err := cc.one(*conn)
+	err := cc.one()
 	if err != nil {
 		return err
 	}
 
-	err = cc.msgLength(*conn)
+	err = cc.msgLength()
 	if err != nil {
 		return err
 	}
@@ -90,27 +89,27 @@ func (cc *Client) handshake(conn *net.Conn) error {
 	return nil
 }
 
-func (cc *Client) one(conn net.Conn) error {
+func (cc *Client) one() error {
 
 	recv := make([]byte, 1)
-	_, err := conn.Read(recv)
+	_, err := cc.conn.Read(recv)
 	if err != nil {
 		return errors.New("failed to received handshake message")
 	}
 
 	if recv[0] != VERSION {
-		cc.handshakeSendReply(conn, 1)
+		cc.handshakeSendReply(1)
 		return errors.New("server has sent a different VERSION number")
 	}
 
-	return cc.handshakeSendReply(conn, 0)
+	return cc.handshakeSendReply(0)
 }
 
-func (cc *Client) msgLength(conn net.Conn) error {
+func (cc *Client) msgLength() error {
 
 	buff := make([]byte, 4)
 
-	_, err := conn.Read(buff)
+	_, err := cc.conn.Read(buff)
 	if err != nil {
 		return errors.New("failed to received max message length 1")
 	}
@@ -123,7 +122,7 @@ func (cc *Client) msgLength(conn net.Conn) error {
 
 	buff = make([]byte, int(msgLen))
 
-	_, err = conn.Read(buff)
+	_, err = cc.conn.Read(buff)
 	if err != nil {
 		return errors.New("failed to received max message length 2")
 	}
@@ -135,14 +134,14 @@ func (cc *Client) msgLength(conn net.Conn) error {
 	}
 
 	cc.maxMsgSize = int(maxMsgSize)
-	return cc.handshakeSendReply(conn, 0)
+	return cc.handshakeSendReply(0)
 }
 
-func (cc *Client) handshakeSendReply(conn net.Conn, result byte) error {
+func (cc *Client) handshakeSendReply(result byte) error {
 
 	buff := make([]byte, 1)
 	buff[0] = result
 
-	_, err := conn.Write(buff)
+	_, err := cc.conn.Write(buff)
 	return err
 }

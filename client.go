@@ -206,8 +206,7 @@ func (c *Client) dial() error {
 		} else {
 
 			c.conn = conn
-
-			err = c.handshake(&conn)
+			err = c.handshake()
 			if err != nil {
 				c.logger.Errorf("Client.dial handshake err: %s", err)
 				return err

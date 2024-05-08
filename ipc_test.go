@@ -1575,7 +1575,7 @@ func TestServerReceiveWrongVersionNumber(t *testing.T) {
 		}
 
 		if recv[0] != 4 {
-			cc.handshakeSendReply(cc.conn, 1)
+			cc.handshakeSendReply(1)
 			return
 		}
 
@@ -1628,7 +1628,7 @@ func TestServerReceiveWrongVersionNumberMulti(t *testing.T) {
 		}
 
 		if recv[0] != 4 {
-			cc.handshakeSendReply(cc.conn, 1)
+			cc.handshakeSendReply(1)
 			return
 		}
 	}()
