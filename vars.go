@@ -10,4 +10,5 @@ const (
 	SOCKET_NAME_BASE            = "/tmp/"
 	SOCKET_NAME_EXT             = ".sock"
 	CLIENT_CONNECT_MSGTYPE      = 12
+	ENCRYPT_BY_DEFAULT          = true
 )

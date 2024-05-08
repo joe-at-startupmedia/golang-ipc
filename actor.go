@@ -175,6 +175,15 @@ func (a *Actor) read(readBytesCb func(*Actor, []byte) bool) {
 			break
 		}
 
+		if a.shouldUseEncryption() {
+			var err error
+			msgRecvd, err = decrypt(*a.cipher, msgRecvd)
+			if err != nil {
+				a.received <- &Message{Err: err, MsgType: -1}
+				continue
+			}
+		}
+
 		msgType := bytesToInt(msgRecvd[:4])
 		msgData := msgRecvd[4:]
 
@@ -199,6 +208,16 @@ func (a *Actor) write() {
 
 		toSend := append(intToBytes(m.MsgType), m.Data...)
 		writer := bufio.NewWriter(a.conn)
+
+		if a.shouldUseEncryption() {
+			var err error
+			toSend, err = encrypt(*a.cipher, toSend)
+			if err != nil {
+				a.received <- &Message{Err: err, MsgType: -1}
+				continue
+			}
+		}
+
 		//first send the message size
 		_, err := writer.Write(intToBytes(len(toSend)))
 		if err != nil {

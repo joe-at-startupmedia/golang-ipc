@@ -28,7 +28,8 @@ func NewClient(name string, config *ClientConfig) (*Client, error) {
 
 	if config == nil {
 		config = &ClientConfig{
-			Name: name,
+			Name:       name,
+			Encryption: ENCRYPT_BY_DEFAULT,
 		}
 	}
 

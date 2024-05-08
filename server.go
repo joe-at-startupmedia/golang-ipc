@@ -35,6 +35,7 @@ func NewServer(name string, config *ServerConfig) (*Server, error) {
 	if config == nil {
 		serverConfig := &ServerConfig{
 			MaxMsgSize: MAX_MSG_SIZE,
+			Encryption: ENCRYPT_BY_DEFAULT,
 		}
 		s.config.ServerConfig = serverConfig
 	} else {
@@ -53,7 +54,7 @@ func StartOnlyServer(config *ServerConfig) (*Server, error) {
 		return nil, err
 	}
 	s.ServerManager = &ServerManager{
-		Servers:      []*Server{&Server{}, s}, //we add an empty server in case we need to MapExec
+		Servers:      []*Server{{}, s}, //we add an empty server in case we need to MapExec
 		ServerConfig: config,
 		Logger:       s.logger,
 	}

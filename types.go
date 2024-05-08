@@ -1,6 +1,7 @@
 package ipc
 
 import (
+	"crypto/cipher"
 	"github.com/sirupsen/logrus"
 	"net"
 	"time"
@@ -13,6 +14,7 @@ type Actor struct {
 	toWrite   chan (*Message)
 	logger    *logrus.Logger
 	config    *ActorConfig
+	cipher    *cipher.AEAD
 	clientRef *Client
 }
 

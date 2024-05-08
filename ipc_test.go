@@ -12,14 +12,15 @@ import (
 var RetriesEnabledClientConfig = &ClientConfig{
 	Timeout:    time.Duration(time.Second * 10),
 	RetryTimer: time.Duration(time.Second * 1),
+	Encryption: ENCRYPT_BY_DEFAULT,
 }
 
 func serverConfig(name string) *ServerConfig {
-	return &ServerConfig{Name: name}
+	return &ServerConfig{Name: name, Encryption: ENCRYPT_BY_DEFAULT}
 }
 
 func clientConfig(name string) *ClientConfig {
-	return &ClientConfig{Name: name}
+	return &ClientConfig{Name: name, Encryption: ENCRYPT_BY_DEFAULT}
 }
 
 func TestStartUp_Name(t *testing.T) {
@@ -1044,6 +1045,7 @@ func TestClientReconnectTimeout(t *testing.T) {
 		Name:       "test7",
 		Timeout:    2 * time.Second,
 		RetryTimer: 1,
+		Encryption: ENCRYPT_BY_DEFAULT,
 	}
 
 	cc, err2 := StartClient(config)
@@ -1480,6 +1482,7 @@ func TestClientReadClose(t *testing.T) {
 		Timeout:    2 * time.Second,
 		RetryTimer: 1,
 		Name:       "test7R",
+		Encryption: ENCRYPT_BY_DEFAULT,
 	}
 
 	cc, err2 := StartClient(config)

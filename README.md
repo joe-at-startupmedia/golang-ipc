@@ -130,6 +130,16 @@ config := &ipc.ClientConfig  {
 }
 ```
 
+ ### Encryption
+
+ By default the connection established will be encypted, ECDH384 is used for the key exchange and AES 256 GCM is used for the cipher.
+
+ Encryption can be swithed off by passing in a custom configuation to the server & client start function:
+
+```go
+Encryption: false
+```
+
  ### Unix Socket Permissions
 
 Under most configurations, a socket created by a user will by default not be writable by another user, making it impossible for the client and server to communicate if being run by separate users. The permission mask can be dropped during socket creation by passing a custom configuration to the server start function.  **This will make the socket writable for any user.**
