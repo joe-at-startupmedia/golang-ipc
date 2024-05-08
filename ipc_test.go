@@ -29,16 +29,10 @@ func TestStartUp_Name(t *testing.T) {
 		t.Error("server - should have an error becuse the ipc name is empty")
 	}
 
-	/*
-		This is no longer possible to test because the client must first connect
-		to the manager which also requires a name
-		_, err2 := StartClient(clientConfig(""))
-
-		t.Error(err2)
-		if err2.Error() != "ipcName cannot be an empty string" {
-			t.Error("client - should have an error becuse the ipc name is empty")
-		}
-	*/
+	_, err2 := StartClient(clientConfig(""))
+	if err2.Error() != "ipcName cannot be an empty string" {
+		t.Error("client - should have an error becuse the ipc name is empty")
+	}
 }
 
 func TestStartUp_Configs(t *testing.T) {
@@ -107,7 +101,7 @@ func TestStartUp_Configs(t *testing.T) {
 		// test would not work in windows
 		// can check test_perm.sock in /tmp after running tests to see perms
 
-		time.Sleep(time.Second / 4)
+		Sleep()
 
 		info, err := os.Stat(srv.listener.Addr().String())
 		if err != nil {
@@ -173,7 +167,7 @@ func TestWrite(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
+	Sleep()
 
 	cc, err2 := StartClient(clientConfig("test10"))
 	if err2 != nil {
@@ -427,7 +421,7 @@ func TestGetConnected(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
+	Sleep()
 
 	cc, err2 := StartClient(clientConfig("test22"))
 	if err2 != nil {
@@ -451,7 +445,7 @@ func TestServerWrongMessageType(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
+	Sleep()
 
 	cc, err2 := StartClient(clientConfig("test333"))
 	if err2 != nil {
@@ -513,7 +507,7 @@ func TestClientWrongMessageType(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
+	Sleep()
 
 	cc, err2 := StartClient(clientConfig("test3"))
 	if err2 != nil {
@@ -584,7 +578,7 @@ func TestServerCorrectMessageType(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
+	Sleep()
 
 	cc, err2 := StartClient(clientConfig("test358"))
 	if err2 != nil {
@@ -649,7 +643,7 @@ func TestClientCorrectMessageType(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
+	Sleep()
 
 	cc, err2 := StartClient(clientConfig("test355"))
 	if err2 != nil {
@@ -716,8 +710,7 @@ func TestServerSendMessage(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-
-	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
+	Sleep()
 
 	cc, err2 := StartClient(clientConfig("test377"))
 	if err2 != nil {
@@ -795,7 +788,7 @@ func TestClientSendMessage(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
+	Sleep()
 
 	cc, err2 := StartClient(clientConfig("test3661"))
 	if err2 != nil {
@@ -873,7 +866,7 @@ func TestClientClose(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
+	Sleep()
 
 	cc, err2 := StartClient(clientConfig("test10A"))
 	if err2 != nil {
@@ -923,7 +916,7 @@ func TestServerClose(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
+	Sleep()
 
 	cc, err2 := StartClient(clientConfig("test1010"))
 	if err2 != nil {
@@ -972,7 +965,7 @@ func TestClientReconnect(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
+	Sleep()
 
 	ccon := clientConfig("test127")
 
@@ -1046,7 +1039,7 @@ func TestClientReconnectTimeout(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
+	Sleep()
 
 	config := &ClientConfig{
 		Name:       "test7",
@@ -1111,7 +1104,7 @@ func TestServerReconnect(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
+	Sleep()
 
 	ccon := clientConfig("test1277")
 
@@ -1177,7 +1170,9 @@ func TestServerReconnect(t *testing.T) {
 	cc.Close()
 
 	//cc.logger.Debug("h")
-	c2, err := StartClient(clientConfig("test1277"))
+	ccon = RetriesEnabledClientConfig
+	ccon.Name = "test1277"
+	c2, err := StartClient(ccon)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1205,7 +1200,7 @@ func TestServerReconnect2(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
+	Sleep()
 
 	cc, err2 := StartClient(clientConfig("test337"))
 	if err2 != nil {
@@ -1286,6 +1281,197 @@ func TestServerReconnect2(t *testing.T) {
 	cc.Close()
 }
 
+func TestServerReconnectMulti(t *testing.T) {
+
+	scon := serverConfig("test1277_multi")
+	scon.MultiClient = true
+	sc, err := StartServer(scon)
+	if err != nil {
+		t.Error(err)
+	}
+
+	Sleep()
+
+	ccon := clientConfig("test1277_multi")
+	ccon.MultiClient = true
+	cc, err2 := StartClient(ccon)
+	if err2 != nil {
+		t.Error(err)
+	}
+
+	connected := make(chan bool, 1)
+	clientConfirm := make(chan bool, 1)
+	clientConnected := make(chan bool, 1)
+
+	go func() {
+
+		for {
+			//cc.logger.Debug("x")
+			m, _ := cc.Read()
+			if m.Status == "Connected" {
+				//cc.logger.Debug("a")
+				<-clientConnected
+				//cc.logger.Debug("b")
+				connected <- true
+				break
+			}
+
+		}
+	}()
+
+	go func() {
+
+		reconnectCheck := 0
+
+		for {
+			//We used ReadTimed in order to scan client buffer on the next loop
+			sc.ServerManager.ReadTimed(2*time.Second, TimeoutMessage, func(_ *Server, m *Message, err error) {
+				//sc.ServerManager.Read(func(_ *Server, m *Message, err error) {
+				//sc.logger.Debugf("z %s %d", m.Status, reconnectCheck)
+
+				if err != nil {
+					//sc.logger.Debugf("TestServerReconnect sever read loop err: %s", err)
+					return
+				}
+
+				if m.Status == "Connected" {
+					//sc.logger.Debug("c")
+					clientConnected <- true
+				}
+
+				if m.Status == "Disconnected" {
+					//sc.logger.Debug("d")
+					reconnectCheck = 1
+				}
+
+				if m.Status == "Connected" && reconnectCheck == 1 {
+					//sc.logger.Debug("e")
+					clientConfirm <- true
+				}
+			})
+		}
+	}()
+
+	//cc.logger.Debug("f")
+	<-connected
+	cc.Close()
+
+	//cc.logger.Debug("h")
+	ccon = clientConfig("test1277_multi")
+	ccon.MultiClient = true
+	c2, err := StartClient(ccon)
+	if err != nil {
+		t.Error(err)
+	}
+
+	for {
+		//cc.logger.Debug("i")
+		m, _ := c2.Read()
+		if m.Status == "Connected" {
+			//cc.logger.Debug("j")
+			break
+		}
+	}
+
+	//cc.logger.Debug("k")
+	<-clientConfirm
+
+	sc.Close()
+	cc.Close()
+}
+
+func TestServerReconnect2Mutli(t *testing.T) {
+	scon := serverConfig("test337_multi")
+	scon.MultiClient = true
+	sc, err := StartServer(scon)
+	if err != nil {
+		t.Error(err)
+	}
+
+	Sleep()
+	ccon := clientConfig("test337_multi")
+	ccon.MultiClient = true
+	cc, err2 := StartClient(ccon)
+	if err2 != nil {
+		t.Error(err)
+	}
+
+	hasConnected := make(chan bool, 1)
+	hasDisconnected := make(chan bool, 1)
+	hasReconnected := make(chan bool, 1)
+
+	go func() {
+		for {
+			select {
+			case <-hasReconnected:
+				return
+			default:
+				m, err := cc.Read()
+				//cc.logger.Warnf("Z %s", m.Status)
+				if m.Status == "Connected" {
+
+					<-hasConnected
+
+					cc.Close()
+
+					<-hasDisconnected
+
+					ccon2 := clientConfig("test337_multi")
+					ccon2.MultiClient = true
+					c2, err2 := StartClient(ccon2)
+					if err2 != nil {
+						t.Error(err)
+					}
+
+					for {
+						n, _ := c2.Read()
+						//cc.logger.Warnf("Y  %s", m.Status)
+						if n.Status == "Connected" {
+							c2.Close()
+							break
+						}
+					}
+					//cc.logger.Warnf("Y 2")
+					return
+				}
+			}
+		}
+	}()
+
+	connect := false
+	disconnect := false
+
+	for {
+		select {
+		case <-hasReconnected:
+			//sc.logger.Warnf("X 4")
+			return
+		default:
+			sc.ServerManager.ReadTimed(2*time.Second, TimeoutMessage, func(_ *Server, m *Message, err error) {
+				//sc.logger.Warnf("X %s %t %t", m.Status, connect, disconnect)
+				if m.Status == "Connected" && connect == false {
+					//sc.logger.Warnf("X 1")
+					hasConnected <- true
+					connect = true
+				}
+
+				if m.Status == "Disconnected" {
+					//sc.logger.Warnf("X 2")
+					hasDisconnected <- true
+					disconnect = true
+				}
+
+				if m.Status == "Connected" && connect == true && disconnect == true {
+					//sc.logger.Warnf("X 3")
+					hasReconnected <- true
+				}
+			})
+		}
+	}
+	sc.Close()
+	cc.Close()
+}
+
 func TestClientReadClose(t *testing.T) {
 
 	sc, err := StartServer(serverConfig("test7R"))
@@ -1293,7 +1479,7 @@ func TestClientReadClose(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(DEFAULT_CLIENT_CONNECT_WAIT)
+	Sleep()
 
 	config := &ClientConfig{
 		Timeout:    2 * time.Second,
@@ -1379,7 +1565,60 @@ func TestServerReceiveWrongVersionNumber(t *testing.T) {
 			t.Error(err2)
 		}
 
-		time.Sleep(3 * time.Second)
+		Sleep()
+		//cc.ClientId = 1
+		conn, err := net.Dial("unix", cc.getSocketName())
+		if err != nil {
+			t.Error(err)
+		}
+		cc.conn = conn
+
+		recv := make([]byte, 2)
+		_, err2 = cc.conn.Read(recv)
+		if err2 != nil {
+			return
+		}
+
+		if recv[0] != 4 {
+			cc.handshakeSendReply(cc.conn, 1)
+			return
+		}
+
+	}()
+
+	for {
+
+		m, err := sc.Read()
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		if m.Err != nil {
+			if m.Err.Error() != "client has a different VERSION number" {
+				t.Error("should have error because server sent the client the wrong VERSION number 1")
+			}
+		}
+	}
+}
+
+func TestServerReceiveWrongVersionNumberMulti(t *testing.T) {
+
+	config := serverConfig("test5")
+	config.MultiClient = true
+	sc, err := StartServer(config)
+	if err != nil {
+		t.Error(err)
+	}
+
+	go func() {
+
+		cc, err2 := NewClient("test5", &ClientConfig{MultiClient: true})
+		if err2 != nil {
+			t.Error(err2)
+		}
+
+		Sleep()
 		cc.ClientId = 1
 		conn, err := net.Dial("unix", cc.getSocketName())
 		if err != nil {
