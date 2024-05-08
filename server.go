@@ -28,7 +28,7 @@ func StartServer(config *ServerConfig) (*Server, error) {
 		return nil, err
 	}
 	s.ServerManager = &ServerManager{
-		Servers:      []*Server{s},
+		Servers:      []*Server{cms, s},
 		ServerConfig: config,
 		Logger:       s.logger,
 	}
@@ -68,40 +68,39 @@ func StartServer(config *ServerConfig) (*Server, error) {
 	return s.run(1)
 }
 
-func (sm *ServerManager) Read(callback func(*Server, *Message, error)) {
+func (sm *ServerManager) MapExec(callback func(*Server), from string) {
 	serverLen := len(sm.Servers)
 	serverOp := make(chan bool, serverLen)
-	for _, server := range sm.Servers {
+	for i, server := range sm.Servers {
+		//skip the first serverManager instance
+		if i == 0 {
+			continue
+		}
 		go func(s *Server) {
-			message, err := s.Read()
-			callback(s, message, err)
+			callback(s)
 			serverOp <- true
 		}(server)
 	}
 	n := 0
-	for n < serverLen {
+	for n < serverLen-1 {
 		<-serverOp
 		n++
-		sm.Logger.Debugf("sm.Read finished for server(%d)", n)
+		sm.Logger.Debugf("sm.%sfinished for server(%d)", from, n)
 	}
 }
 
+func (sm *ServerManager) Read(callback func(*Server, *Message, error)) {
+	sm.MapExec(func(s *Server) {
+		message, err := s.Read()
+		callback(s, message, err)
+	}, "Read")
+}
+
 func (sm *ServerManager) ReadTimed(duration time.Duration, timeoutMessage *Message, callback func(*Server, *Message, error)) {
-	serverLen := len(sm.Servers)
-	serverOp := make(chan bool, serverLen)
-	for _, server := range sm.Servers {
-		go func(s *Server) {
-			message, err := s.ReadTimed(duration, timeoutMessage)
-			callback(s, message, err)
-			serverOp <- true
-		}(server)
-	}
-	n := 0
-	for n < serverLen {
-		<-serverOp
-		n++
-		sm.Logger.Debugf("sm.ReadTimed finished for server(%d)", n)
-	}
+	sm.MapExec(func(s *Server) {
+		message, err := s.ReadTimed(duration, timeoutMessage)
+		callback(s, message, err)
+	}, "ReadTimed")
 }
 
 func NewServer(name string, config *ServerConfig) (*Server, error) {
@@ -228,13 +227,11 @@ func (s *Server) ByteReader(a *Actor, buff []byte) bool {
 // Close - closes the connection
 func (s *Server) Close() {
 
-	s.status = Closing
+	s.Actor.Close()
 
-	if s.listener != nil {
-		s.listener.Close()
-	}
-
-	if s.conn != nil {
-		s.conn.Close()
+	for _, srv := range s.ServerManager.Servers {
+		if srv.listener != nil {
+			srv.listener.Close()
+		}
 	}
 }

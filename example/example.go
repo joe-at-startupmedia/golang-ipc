@@ -10,18 +10,19 @@ import (
 
 // prevents a race condition where the client attempts to connect before the server begins listening
 var serverErrorChan = make(chan error, 1)
+var serverChan = make(chan *ipc.Server, 1)
 
 func main() {
 
 	go server()
 	err := <-serverErrorChan
+	srv := <-serverChan
 	if err != nil {
 		log.Printf("server error %s:", err)
 		main()
 	}
 
-	//change the sleep time by using IPC_CLIENT_CONNECT_WAIT env variable (seconds)
-	time.Sleep(time.Duration(ipc.GetDefaultClientConnectWait()) * time.Second)
+	sleep()
 
 	clientConfig := &ipc.ClientConfig{Name: "example1"}
 
@@ -31,7 +32,7 @@ func main() {
 		main()
 	}
 
-	time.Sleep(time.Duration(ipc.GetDefaultClientConnectWait()) * time.Second)
+	sleep()
 
 	c2, err := ipc.StartClient(clientConfig)
 	if err != nil {
@@ -41,14 +42,25 @@ func main() {
 
 	serverPonger(c2, false)
 
-	time.Sleep(time.Duration(ipc.GetDefaultClientConnectWait()) * time.Second)
+	sleep()
 
 	serverPonger(c1, false)
 
-	time.Sleep(time.Duration(ipc.GetDefaultClientConnectWait()) * time.Second)
+	sleep()
 
 	serverPonger(c2, true)
 
+	sleep()
+
+	c1.Close()
+	c2.Close()
+	srv.Close()
+
+	sleep()
+}
+
+// change the sleep time by using IPC_CLIENT_CONNECT_WAIT env variable (seconds)
+func sleep() {
 	time.Sleep(time.Duration(ipc.GetDefaultClientConnectWait()) * time.Second)
 }
 
@@ -96,7 +108,7 @@ func serverPonger(c *ipc.Client, autosend bool) {
 		} else {
 			log.Println("client status", c.Status())
 		}
-		time.Sleep(time.Duration(ipc.GetDefaultClientConnectWait()) * time.Second)
+		sleep()
 	}
 
 }
@@ -105,11 +117,13 @@ func server() {
 
 	srv, err := ipc.StartServer(&ipc.ServerConfig{Name: "example1"})
 	serverErrorChan <- err
+
 	if err != nil {
 		log.Println("server error", err)
 		return
 	}
 
+	serverChan <- srv
 	//log.Println("server status", srv.Status())
 
 	for {

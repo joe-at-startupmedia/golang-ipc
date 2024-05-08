@@ -286,16 +286,6 @@ func reconnect(c *Client) {
 	go c.read(c.ByteReader)
 }
 
-// Close - closes the connection
-func (a *Client) Close() {
-
-	a.status = Closing
-
-	if a.conn != nil {
-		a.conn.Close()
-	}
-}
-
 // getStatus - get the current status of the connection
 func (c *Client) String() string {
 	return fmt.Sprintf("Client(%d)", c.ClientId)
