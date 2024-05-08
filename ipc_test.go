@@ -1636,7 +1636,6 @@ func TestServerReceiveWrongVersionNumberMulti(t *testing.T) {
 			cc.handshakeSendReply(cc.conn, 1)
 			return
 		}
-
 	}()
 
 	for {

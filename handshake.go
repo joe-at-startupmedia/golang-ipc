@@ -9,9 +9,9 @@ import (
 
 // 1st message sent from the server
 // byte 0 = protocal VERSION no.
-func (sc *Server) handshake(conn *net.Conn, clientId int) error {
+func (sc *Server) handshake(conn *net.Conn) error {
 
-	err := sc.one(*conn, clientId)
+	err := sc.one(*conn)
 	if err != nil {
 		return err
 	}
@@ -24,12 +24,11 @@ func (sc *Server) handshake(conn *net.Conn, clientId int) error {
 	return nil
 }
 
-func (sc *Server) one(conn net.Conn, clientId int) error {
+func (sc *Server) one(conn net.Conn) error {
 
-	buff := make([]byte, 2)
+	buff := make([]byte, 1)
 
 	buff[0] = byte(VERSION)
-	buff[1] = byte(clientId)
 	_, err := conn.Write(buff)
 	if err != nil {
 		return errors.New("unable to send handshake ")
@@ -93,7 +92,7 @@ func (cc *Client) handshake(conn *net.Conn) error {
 
 func (cc *Client) one(conn net.Conn) error {
 
-	recv := make([]byte, 2)
+	recv := make([]byte, 1)
 	_, err := conn.Read(recv)
 	if err != nil {
 		return errors.New("failed to received handshake message")
@@ -102,16 +101,6 @@ func (cc *Client) one(conn net.Conn) error {
 	if recv[0] != VERSION {
 		cc.handshakeSendReply(conn, 1)
 		return errors.New("server has sent a different VERSION number")
-	}
-
-	clientId := int(recv[1])
-
-	if clientId < 0 {
-		cc.handshakeSendReply(conn, 1)
-		return errors.New("server has sent a different VERSION number")
-	} else if clientId > 0 {
-		cc.logger.Infof("Setting clientId: %d: ", clientId)
-		cc.ClientId = clientId
 	}
 
 	return cc.handshakeSendReply(conn, 0)

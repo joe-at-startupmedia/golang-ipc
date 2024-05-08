@@ -187,13 +187,13 @@ func (s *Server) run(clientId int) (*Server, error) {
 		return s, err
 	}
 
-	go s.acceptLoop(clientId)
+	go s.acceptLoop()
 	s.status = Listening
 
 	return s, nil
 }
 
-func (s *Server) acceptLoop(clientId int) {
+func (s *Server) acceptLoop() {
 
 	i := 0
 	for {
@@ -208,7 +208,7 @@ func (s *Server) acceptLoop(clientId int) {
 
 			s.conn = conn
 
-			err2 := s.handshake(&conn, clientId)
+			err2 := s.handshake(&conn)
 			if err2 != nil {
 				s.logger.Errorf("Server.acceptLoop handshake err: %s", err2)
 				s.dispatchError(err2)
