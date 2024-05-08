@@ -1,5 +1,5 @@
 # golang-ipc
-Golang Inter-process communication library for Mac/Linux forked from [https://github.com/james-barrow/golang-ipc](james-barrow/golang-ipc) with the following features added:
+Golang Inter-process communication library for Mac/Linux forked from (james-barrow/golang-ipc)[[https://github.com/james-barrow/golang-ipc] with the following features added:
 * Adds the configurable ability to spawn multiple clients. In order to allow multiple client connections, multiple socket connections are dynamically allocated
 * Adds ReadTimed methods which return after the `time.Duration` provided
 * Adds ServerManager instance to easily poll read requests from multiple clients
