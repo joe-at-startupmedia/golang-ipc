@@ -183,7 +183,7 @@ func (a *Actor) read(readBytesCb func(*Actor, []byte) bool) {
 	}
 }
 
-func (a *Server) write() {
+func (a *Actor) write() {
 
 	for {
 

@@ -1,7 +1,6 @@
 package ipc
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -158,39 +157,6 @@ func start(c *Client) (*Client, error) {
 	go c.dispatchStatus(Connected)
 
 	return c, nil
-}
-
-func (a *Client) write() {
-
-	for {
-
-		m, ok := <-a.toWrite
-
-		if !ok {
-			break
-		}
-
-		toSend := append(intToBytes(m.MsgType), m.Data...)
-		writer := bufio.NewWriter(a.conn)
-		//first send the message size
-		_, err := writer.Write(intToBytes(len(toSend)))
-		if err != nil {
-			a.logger.Errorf("error writing message size: %s", err)
-		}
-		//last send the message
-		_, err = writer.Write(toSend)
-		if err != nil {
-			a.logger.Errorf("error writing message: %s", err)
-		}
-
-		err = writer.Flush()
-		if err != nil {
-			a.logger.Errorf("error flushing data: %s", err)
-			continue
-		}
-
-		time.Sleep(2 * time.Millisecond)
-	}
 }
 
 // Client connect to the unix socket created by the server -  for unix and linux
