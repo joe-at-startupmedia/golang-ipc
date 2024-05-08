@@ -175,9 +175,7 @@ func (s *Server) acceptLoop(clientId int) {
 	i := 0
 	for {
 
-		s.logger.Debugf("Server.acceptLoop 1")
 		conn, err := s.listener.Accept()
-		s.logger.Debugf("Server.acceptLoop 2")
 		if err != nil {
 			s.logger.Debugf("Server.acceptLoop -> listen.Accept err: %s", err)
 			return
@@ -188,7 +186,6 @@ func (s *Server) acceptLoop(clientId int) {
 			s.conn = conn
 
 			err2 := s.handshake(&conn, clientId)
-			s.logger.Debugf("Server.acceptLoop 3")
 			if err2 != nil {
 				s.logger.Errorf("Server.acceptLoop handshake err: %s", err2)
 				s.dispatchError(err2)
@@ -197,7 +194,6 @@ func (s *Server) acceptLoop(clientId int) {
 				conn.Close()
 
 			} else {
-
 				go s.read(s.ByteReader)
 				go s.write()
 

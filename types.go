@@ -7,8 +7,7 @@ import (
 )
 
 type Actor struct {
-	Client     *Client //self referencing
-	Server     *Server //self referencing
+	ClientRef  *Client //self referencing
 	name       string
 	status     Status
 	conn       net.Conn

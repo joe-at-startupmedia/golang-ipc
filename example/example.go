@@ -20,17 +20,11 @@ func main() {
 	}
 
 	//wait for server to connect
-	time.Sleep(time.Second * 4)
+	time.Sleep(time.Duration(ipc.GetDefaultClientConnectWait()) * time.Second)
 
-	_, err = ipc.StartClient("example1", nil)
-	if err != nil {
-		log.Printf("client error %s:", err)
-		main()
-	}
+	clientConfig := &ipc.ClientConfig{Name: "example1"}
 
-	time.Sleep(time.Second * 4)
-
-	c, err := ipc.StartClient("example1", nil)
+	c1, err := ipc.StartClient(clientConfig)
 	if err != nil {
 		log.Printf("client error %s:", err)
 		main()
@@ -38,9 +32,25 @@ func main() {
 
 	time.Sleep(time.Duration(ipc.GetDefaultClientConnectWait()) * time.Second)
 
+	c2, err := ipc.StartClient(clientConfig)
+	if err != nil {
+		log.Printf("client error %s:", err)
+		main()
+	}
+
+	serverPinger(c2)
+
+	time.Sleep(time.Second * 10)
+
+	serverPinger(c1)
+
+	time.Sleep(time.Second * 5)
+}
+
+func serverPinger(c *ipc.Client) {
 	for {
 
-		message, err := c.Read()
+		message, err := c.ReadTimed(5*time.Second, ipc.TimeoutMessage)
 
 		if err == nil && c.StatusCode() != ipc.Connecting {
 
@@ -56,8 +66,8 @@ func main() {
 			} else {
 
 				log.Println("Client received: "+string(message.Data)+" - Message type: ", message.MsgType)
-				c.Write(5, []byte("Message from client - PONG"))
-
+				c.Write(5, []byte("Message from client - PING"))
+				break
 			}
 
 		} else if err != nil {
@@ -97,7 +107,7 @@ func serverRead() {
 					if message.Status == "Connected" {
 
 						log.Println("server status", s.Status())
-						s.Write(1, []byte("server - PING"))
+						s.Write(1, []byte("server - PONG"))
 
 					}
 
@@ -137,16 +147,13 @@ func serverReadTimed() {
 					if message.Status == "Connected" {
 
 						log.Println("server status", s.Status())
-						s.Write(1, []byte("server - PING"))
+						s.Write(1, []byte("server - PONG"))
 
 					}
 
-				} else {
+				} else if message != ipc.TimeoutMessage {
 
 					log.Println("Server received: "+string(message.Data)+" - Message type: ", message.MsgType)
-					log.Printf("ServerManager server length: %d", len(srv.ServerManager.Servers))
-					//s.Close()
-					//return
 				}
 
 			} else {

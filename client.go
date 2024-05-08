@@ -12,21 +12,27 @@ import (
 
 // StartClient - start the ipc client.
 // ipcName = is the name of the unix socket or named pipe that the client will try and connect to.
-func StartClient(ipcName string, config *ClientConfig) (*Client, error) {
+func StartClient(config *ClientConfig) (*Client, error) {
 
-	cm, err := NewClient(ipcName+"_manager", config)
+	cm, err := NewClient(config.Name+"_manager", config)
 	if err != nil {
 		return nil, err
 	}
+
 	cm, err = start(cm)
+
 	if err != nil {
 		return nil, err
 	}
 
-	cm.Write(CLIENT_CONNECT_MSGTYPE, []byte("client_id_request"))
+	err = cm.Write(CLIENT_CONNECT_MSGTYPE, []byte("client_id_request"))
+
+	if err != nil {
+		return nil, err
+	}
 
 	for {
-		message, err := cm.Read()
+		message, err := cm.ReadTimed(5*time.Second, TimeoutMessage)
 
 		msgType := message.MsgType
 		msgData := bytesToInt(message.Data)
@@ -35,13 +41,15 @@ func StartClient(ipcName string, config *ClientConfig) (*Client, error) {
 
 			cm.logger.Infof("Attempting to create a new Client %d, %s", msgData, message.Data)
 
-			cc, err := NewClient(ipcName, config)
+			cc, err := NewClient(config.Name, config)
 			if err != nil {
 				return nil, err
 			}
 			cc.clientId = msgData
 			cm.Close()
 			return start(cc)
+		} else {
+			cm.logger.Debugf("err: %s, msgType: %d, msgData: %d", err, msgType, msgData)
 		}
 	}
 }
@@ -61,7 +69,7 @@ func NewClient(name string, config *ClientConfig) (*Client, error) {
 		Actor: actor,
 	}
 
-	actor.Client = cc
+	actor.ClientRef = cc
 
 	if config == nil {
 
@@ -245,7 +253,7 @@ func (c *Client) ByteReader(a *Actor, buff []byte) bool {
 			a.conn.Close()
 
 			if a.status != Closing {
-				go a.Client.reconnect()
+				go a.ClientRef.reconnect(c)
 			}
 			return false
 		}
@@ -257,7 +265,7 @@ func (c *Client) ByteReader(a *Actor, buff []byte) bool {
 	return true
 }
 
-func (c *Client) reconnect() {
+func (b *Client) reconnect(c *Client) {
 
 	c.logger.Warn("Client.reconnect called")
 	c.dispatchStatus(ReConnecting)

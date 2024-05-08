@@ -255,3 +255,13 @@ func (a *Actor) Status() string {
 
 	return a.status.String()
 }
+
+// Close - closes the connection
+func (a *Actor) Close() {
+
+	a.status = Closing
+
+	if a.conn != nil {
+		a.conn.Close()
+	}
+}
