@@ -1,90 +1,213 @@
 package ipc
 
 import (
-	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
 	"syscall"
+	"time"
 )
 
 // StartServer - starts the ipc server.
 //
 // ipcName - is the name of the unix socket or named pipe that will be created, the client needs to use the same name
-func StartServer(ipcName string, config *ServerConfig) (*Server, error) {
+func StartServer(config *ServerConfig) (*Server, error) {
 
-	err := checkIpcName(ipcName)
+	if config.MultiClient {
+		return StartMultiServer(config)
+	} else {
+		return StartOnlyServer(config)
+	}
+}
+
+func NewServer(name string, config *ServerConfig) (*Server, error) {
+	err := checkIpcName(name)
 	if err != nil {
 		return nil, err
 	}
-
+	config.Name = name
 	s := &Server{Actor: NewActor(&ActorConfig{
-		Name:         ipcName,
 		IsServer:     true,
 		ServerConfig: config,
 	})}
 
 	if config == nil {
-		s.maxMsgSize = MAX_MSG_SIZE
-		s.unMask = false
+		serverConfig := &ServerConfig{
+			MaxMsgSize: MAX_MSG_SIZE,
+			Encryption: ENCRYPT_BY_DEFAULT,
+		}
+		s.config.ServerConfig = serverConfig
 	} else {
 
 		if config.MaxMsgSize < 1024 {
-			s.maxMsgSize = MAX_MSG_SIZE
-		} else {
-			s.maxMsgSize = config.MaxMsgSize
+			s.config.ServerConfig.MaxMsgSize = MAX_MSG_SIZE
 		}
-
-		s.unMask = config.UnmaskPermissions
 	}
-
-	err = s.run()
-
 	return s, err
 }
 
-func (s *Server) run() error {
+func StartOnlyServer(config *ServerConfig) (*Server, error) {
 
-	base := "/tmp/"
-	sock := ".sock"
+	s, err := NewServer(config.Name, config)
+	if err != nil {
+		return nil, err
+	}
+	s.ServerManager = &ServerManager{
+		Servers:      []*Server{{}, s}, //we add an empty server in case we need to MapExec
+		ServerConfig: config,
+		Logger:       s.logger,
+	}
 
-	if err := os.RemoveAll(base + s.name + sock); err != nil {
-		return err
+	return s.run(0)
+}
+
+func StartMultiServer(config *ServerConfig) (*Server, error) {
+
+	//well be modifying the config.Name property by reference
+	configName := config.Name
+
+	cms, err := NewServer(configName+"_manager", config)
+	if err != nil {
+		return nil, err
+	}
+	cms, err = cms.run(0)
+	if err != nil {
+		return nil, err
+	}
+
+	s, err := NewServer(configName, config)
+	if err != nil {
+		return nil, err
+	}
+	s.ServerManager = &ServerManager{
+		Servers:      []*Server{cms, s},
+		ServerConfig: config,
+		Logger:       s.logger,
+	}
+
+	ClientCount := 0
+
+	go func() {
+		for {
+
+			message, err := cms.Read()
+			if err != nil {
+				s.logger.Errorf("ServerManager.read err: %s", err)
+				s.dispatchError(err)
+				continue
+			}
+			msgType := message.MsgType
+			msgData := string(message.Data)
+
+			if err == nil && msgType == CLIENT_CONNECT_MSGTYPE && msgData == "client_id_request" {
+				cms.logger.Infof("recieved a request to create a new client server %d", ClientCount+1)
+				ns, err := NewServer(configName, config)
+				if err == nil {
+					ClientCount++
+					cms.Write(CLIENT_CONNECT_MSGTYPE, intToBytes(ClientCount))
+					if ClientCount == 1 {
+						//we already pre-provisioned the first client
+						continue
+					}
+					go ns.run(ClientCount)
+					s.ServerManager = &ServerManager{
+						Servers:      append(s.ServerManager.Servers, ns),
+						ServerConfig: config,
+						Logger:       s.logger,
+					}
+				} else {
+					cms.logger.Errorf("encountered an error attempting to create a client server %d %s", ClientCount+1, err)
+				}
+			}
+		}
+	}()
+
+	return s.run(1)
+}
+
+func (sm *ServerManager) MapExec(callback func(*Server), from string) {
+	serverLen := len(sm.Servers)
+	serverOp := make(chan bool, serverLen)
+	for i, server := range sm.Servers {
+		//skip the first serverManager instance
+		if i == 0 {
+			continue
+		}
+		go func(s *Server) {
+			callback(s)
+			serverOp <- true
+		}(server)
+	}
+	n := 0
+	for n < serverLen-1 {
+		<-serverOp
+		n++
+		sm.Logger.Debugf("sm.%sfinished for server(%d)", from, n)
+	}
+}
+
+func (sm *ServerManager) Read(callback func(*Server, *Message, error)) {
+	sm.MapExec(func(s *Server) {
+		message, err := s.Read()
+		callback(s, message, err)
+	}, "Read")
+}
+
+func (sm *ServerManager) ReadTimed(duration time.Duration, timeoutMessage *Message, callback func(*Server, *Message, error)) {
+	sm.MapExec(func(s *Server) {
+		message, err := s.ReadTimed(duration, timeoutMessage)
+		callback(s, message, err)
+	}, "ReadTimed")
+}
+
+func (s *Server) run(clientId int) (*Server, error) {
+
+	var socketName string
+
+	if clientId > 0 {
+		socketName = fmt.Sprintf("%s%s%d%s", SOCKET_NAME_BASE, s.config.ServerConfig.Name, clientId, SOCKET_NAME_EXT)
+	} else {
+		socketName = fmt.Sprintf("%s%s%s", SOCKET_NAME_BASE, s.config.ServerConfig.Name, SOCKET_NAME_EXT)
+	}
+
+	if err := os.RemoveAll(socketName); err != nil {
+		return s, err
 	}
 
 	var oldUmask int
-	if s.unMask {
+	if s.config.ServerConfig.UnmaskPermissions {
 		oldUmask = syscall.Umask(0)
 	}
 
-	listen, err := net.Listen("unix", base+s.name+sock)
+	listener, err := net.Listen("unix", socketName)
 
-	if s.unMask {
+	s.listener = listener
+
+	if s.config.ServerConfig.UnmaskPermissions {
 		syscall.Umask(oldUmask)
 	}
 
 	if err != nil {
 		s.logger.Errorf("Server.run err: %s", err)
-		return err
+		return s, err
 	}
 
-	s.listen = listen
-
 	go s.acceptLoop()
-
 	s.status = Listening
 
-	return nil
-
+	return s, nil
 }
 
 func (s *Server) acceptLoop() {
 
+	i := 0
 	for {
-		conn, err := s.listen.Accept()
+
+		conn, err := s.listener.Accept()
 		if err != nil {
 			s.logger.Debugf("Server.acceptLoop -> listen.Accept err: %s", err)
-			break
+			return
 		}
 
 		if s.status == Listening || s.status == Disconnected {
@@ -94,73 +217,37 @@ func (s *Server) acceptLoop() {
 			err2 := s.handshake()
 			if err2 != nil {
 				s.logger.Errorf("Server.acceptLoop handshake err: %s", err2)
-				s.received <- &Message{Err: err2, MsgType: -1}
+				s.dispatchError(err2)
 				s.status = Error
-				s.listen.Close()
-				s.conn.Close()
+				s.listener.Close()
+				conn.Close()
 
 			} else {
-
-				go s.read()
+				go s.read(s.ByteReader)
 				go s.write()
 
-				s.status = Connected
-				s.received <- &Message{Status: s.status.String(), MsgType: -1}
+				s.dispatchStatus(Connected)
 			}
-
 		}
-
-	}
-
-}
-
-func (a *Server) read() {
-	bLen := make([]byte, 4)
-
-	for {
-		res := a.readData(bLen)
-		if !res {
-			break
-		}
-
-		mLen := bytesToInt(bLen)
-
-		msgRecvd := make([]byte, mLen)
-
-		res = a.readData(msgRecvd)
-		if !res {
-			break
-		}
-
-		if bytesToInt(msgRecvd[:4]) == 0 {
-			//  type 0 = control message
-			a.logger.Debugf("Server.read - control message encountered")
-		} else {
-			a.received <- &Message{Data: msgRecvd[4:], MsgType: bytesToInt(msgRecvd[:4])}
-		}
+		i++
 	}
 }
 
-func (s *Server) readData(buff []byte) bool {
+func (s *Server) ByteReader(a *Actor, buff []byte) bool {
 
-	_, err := io.ReadFull(s.conn, buff)
+	_, err := io.ReadFull(a.conn, buff)
 	if err != nil {
 
-		if s.status == Closing {
-
-			s.status = Closed
-			s.received <- &Message{Status: s.status.String(), MsgType: -1}
-			s.received <- &Message{Err: errors.New("server has closed the connection"), MsgType: -1}
+		if a.status == Closing {
+			a.dispatchStatusBlocking(Closed)
+			a.dispatchErrorStrBlocking("server has closed the connection")
 			return false
 		}
 
 		if err == io.EOF {
-
-			s.status = Disconnected
-			s.received <- &Message{Status: s.status.String(), MsgType: -1}
+			a.dispatchStatus(Disconnected)
 			return false
 		}
-
 	}
 
 	return true
@@ -169,13 +256,11 @@ func (s *Server) readData(buff []byte) bool {
 // Close - closes the connection
 func (s *Server) Close() {
 
-	s.status = Closing
+	s.Actor.Close()
 
-	if s.listen != nil {
-		s.listen.Close()
-	}
-
-	if s.conn != nil {
-		s.conn.Close()
+	for _, srv := range s.ServerManager.Servers {
+		if srv.listener != nil {
+			srv.listener.Close()
+		}
 	}
 }
