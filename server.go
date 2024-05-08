@@ -14,6 +14,30 @@ import (
 // ipcName - is the name of the unix socket or named pipe that will be created, the client needs to use the same name
 func StartServer(config *ServerConfig) (*Server, error) {
 
+	if config.MultiClient {
+		return StartMultiServer(config)
+	} else {
+		return StartOnlyServer(config)
+	}
+}
+
+func StartOnlyServer(config *ServerConfig) (*Server, error) {
+
+	s, err := NewServer(config.Name, config)
+	if err != nil {
+		return nil, err
+	}
+	s.ServerManager = &ServerManager{
+		Servers:      []*Server{&Server{}, s}, //we add an empty server in case we need to MapExec
+		ServerConfig: config,
+		Logger:       s.logger,
+	}
+
+	return s.run(0)
+}
+
+func StartMultiServer(config *ServerConfig) (*Server, error) {
+
 	cms, err := NewServer(config.Name+"_manager", config)
 	if err != nil {
 		return nil, err

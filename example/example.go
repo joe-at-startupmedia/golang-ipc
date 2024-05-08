@@ -22,9 +22,10 @@ func main() {
 		main()
 	}
 
-	sleep()
+	// change the sleep time by using IPC_CLIENT_CONNECT_WAIT env variable (seconds)
+	ipc.Sleep()
 
-	clientConfig := &ipc.ClientConfig{Name: "example1"}
+	clientConfig := &ipc.ClientConfig{Name: "example1", MultiClient: true}
 
 	c1, err := ipc.StartClient(clientConfig)
 	if err != nil {
@@ -32,7 +33,7 @@ func main() {
 		main()
 	}
 
-	sleep()
+	ipc.Sleep()
 
 	c2, err := ipc.StartClient(clientConfig)
 	if err != nil {
@@ -42,26 +43,21 @@ func main() {
 
 	serverPonger(c2, false)
 
-	sleep()
+	ipc.Sleep()
 
 	serverPonger(c1, false)
 
-	sleep()
+	ipc.Sleep()
 
 	serverPonger(c2, true)
 
-	sleep()
+	ipc.Sleep()
 
 	c1.Close()
 	c2.Close()
 	srv.Close()
 
-	sleep()
-}
-
-// change the sleep time by using IPC_CLIENT_CONNECT_WAIT env variable (seconds)
-func sleep() {
-	time.Sleep(time.Duration(ipc.GetDefaultClientConnectWait()) * time.Second)
+	ipc.Sleep()
 }
 
 func serverPonger(c *ipc.Client, autosend bool) {
@@ -108,14 +104,14 @@ func serverPonger(c *ipc.Client, autosend bool) {
 		} else {
 			log.Println("client status", c.Status())
 		}
-		sleep()
+		ipc.Sleep()
 	}
 
 }
 
 func server() {
 
-	srv, err := ipc.StartServer(&ipc.ServerConfig{Name: "example1"})
+	srv, err := ipc.StartServer(&ipc.ServerConfig{Name: "example1", MultiClient: true})
 	serverErrorChan <- err
 
 	if err != nil {

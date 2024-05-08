@@ -7,7 +7,6 @@ import (
 )
 
 type Actor struct {
-	ClientRef  *Client //self referencing
 	name       string
 	status     Status
 	conn       net.Conn
@@ -48,14 +47,16 @@ type ServerConfig struct {
 	MaxMsgSize        int
 	UnmaskPermissions bool
 	LogLevel          string
+	MultiClient       bool
 }
 
 // ClientConfig - used to pass configuation overrides to ClientStart()
 type ClientConfig struct {
-	Name       string
-	Timeout    time.Duration
-	RetryTimer time.Duration
-	LogLevel   string
+	Name        string
+	Timeout     time.Duration
+	RetryTimer  time.Duration
+	LogLevel    string
+	MultiClient bool
 }
 
 type ServerManager struct {

@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"os"
 	"strconv"
+	"time"
 )
 
 // checks the name passed into the start function to ensure it's ok/will work.
@@ -63,4 +64,9 @@ func GetDefaultClientConnectWait() int {
 		}
 	}
 	return DEFAULT_CLIENT_CONNECT_WAIT
+}
+
+// Sleep change the sleep time by using IPC_CLIENT_CONNECT_WAIT env variable (seconds)
+func Sleep() {
+	time.Sleep(time.Duration(GetDefaultClientConnectWait()) * time.Second)
 }

@@ -12,6 +12,23 @@ import (
 // StartClient - start the ipc client.
 // ipcName = is the name of the unix socket or named pipe that the client will try and connect to.
 func StartClient(config *ClientConfig) (*Client, error) {
+	if config.MultiClient {
+		return StartMultiClient(config)
+	} else {
+		return StartOnlyClient(config)
+	}
+}
+
+func StartOnlyClient(config *ClientConfig) (*Client, error) {
+	cc, err := NewClient(config.Name, config)
+	if err != nil {
+		return nil, err
+	}
+	cc.ClientId = 0
+	return start(cc)
+}
+
+func StartMultiClient(config *ClientConfig) (*Client, error) {
 
 	cm, err := NewClient(config.Name+"_manager", config)
 	if err != nil {
@@ -59,16 +76,13 @@ func NewClient(name string, config *ClientConfig) (*Client, error) {
 		return nil, err
 
 	}
-	actor := NewActor(&ActorConfig{
-		Name:         name,
-		ClientConfig: config,
-	})
 
 	cc := &Client{
-		Actor: actor,
+		Actor: NewActor(&ActorConfig{
+			Name:         name,
+			ClientConfig: config,
+		}),
 	}
-
-	actor.ClientRef = cc
 
 	if config == nil {
 
