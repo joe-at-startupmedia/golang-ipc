@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"time"
 
@@ -9,28 +10,75 @@ import (
 
 // prevents a race condition where the client attempts to connect before the server begins listening
 var serverErrorChan = make(chan error, 1)
+var serverChan = make(chan *ipc.Server, 1)
 
 func main() {
 
 	go server()
 	err := <-serverErrorChan
-
+	srv := <-serverChan
 	if err != nil {
+		log.Printf("server error %s:", err)
 		main()
 	}
-	c, err := ipc.StartClient("example1", nil)
+
+	sleep()
+
+	clientConfig := &ipc.ClientConfig{Name: "example1"}
+
+	c1, err := ipc.StartClient(clientConfig)
 	if err != nil {
 		log.Printf("client error %s:", err)
 		main()
 	}
 
+	sleep()
+
+	c2, err := ipc.StartClient(clientConfig)
+	if err != nil {
+		log.Printf("client error %s:", err)
+		main()
+	}
+
+	serverPonger(c2, false)
+
+	sleep()
+
+	serverPonger(c1, false)
+
+	sleep()
+
+	serverPonger(c2, true)
+
+	sleep()
+
+	c1.Close()
+	c2.Close()
+	srv.Close()
+
+	sleep()
+}
+
+// change the sleep time by using IPC_CLIENT_CONNECT_WAIT env variable (seconds)
+func sleep() {
 	time.Sleep(time.Duration(ipc.GetDefaultClientConnectWait()) * time.Second)
+}
+
+func serverPonger(c *ipc.Client, autosend bool) {
+
+	pongMessage := fmt.Sprintf("Message from client(%d) - PONG", c.ClientId)
+
+	if autosend {
+		c.Write(5, []byte(pongMessage))
+	}
 
 	for {
 
-		message, err := c.ReadTimed(time.Second*5, ipc.TimeoutMessage)
+		message, err := c.ReadTimed(5*time.Second, ipc.TimeoutMessage)
 
 		if err == nil && c.StatusCode() != ipc.Connecting {
+
+			//log.Printf("Client(%d) received: %s - Message type: %d, Message Status %s", c.ClientId, string(message.Data), message.MsgType, message.Status)
 
 			if message.MsgType == -1 {
 
@@ -39,13 +87,14 @@ func main() {
 				if message.Status == "Reconnecting" {
 					c.Close()
 					return
+				} else if message.Status == "Connected" {
+					c.Write(5, []byte(pongMessage))
 				}
 
-			} else {
+			} else if message != ipc.TimeoutMessage {
 
-				log.Println("Client received: "+string(message.Data)+" - Message type: ", message.MsgType)
-				c.Write(5, []byte("Message from client - PONG"))
-
+				log.Printf("Client(%d) received: %s - Message type: %d", c.ClientId, string(message.Data), message.MsgType)
+				break
 			}
 
 		} else if err != nil {
@@ -59,46 +108,48 @@ func main() {
 		} else {
 			log.Println("client status", c.Status())
 		}
-		time.Sleep(time.Duration(ipc.GetDefaultClientConnectWait()) * time.Second)
+		sleep()
 	}
 
 }
 
 func server() {
 
-	s, err := ipc.StartServer("example1", nil)
+	srv, err := ipc.StartServer(&ipc.ServerConfig{Name: "example1"})
 	serverErrorChan <- err
+
 	if err != nil {
 		log.Println("server error", err)
 		return
 	}
 
-	log.Println("server status", s.Status())
+	serverChan <- srv
+	//log.Println("server status", srv.Status())
 
 	for {
+		//log.Println("server status loop", srv.Status())
+		// we need to use the ReadTimed in order to poll all new clients
+		srv.ServerManager.ReadTimed(5*time.Second, ipc.TimeoutMessage, func(s *ipc.Server, message *ipc.Message, err error) {
+			if err == nil {
 
-		message, err := s.Read()
+				if message.MsgType == -1 {
 
-		if err == nil {
+					if message.Status == "Connected" {
 
-			if message.MsgType == -1 {
+						log.Println("server sending ping: status", s.Status())
+						s.Write(1, []byte("server - PING"))
 
-				if message.Status == "Connected" {
+					}
 
-					log.Println("server status", s.Status())
+				} else if message != ipc.TimeoutMessage {
+
+					log.Println("Server received: "+string(message.Data)+" - Message type: ", message.MsgType)
 					s.Write(1, []byte("server - PING"))
-
 				}
 
 			} else {
-
-				log.Println("Server received: "+string(message.Data)+" - Message type: ", message.MsgType)
-				s.Close()
-				return
+				log.Println("Read err: ", err)
 			}
-
-		} else {
-			break
-		}
+		})
 	}
 }

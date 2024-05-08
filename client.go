@@ -2,6 +2,7 @@ package ipc
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"strings"
@@ -10,18 +11,64 @@ import (
 
 // StartClient - start the ipc client.
 // ipcName = is the name of the unix socket or named pipe that the client will try and connect to.
-func StartClient(ipcName string, config *ClientConfig) (*Client, error) {
+func StartClient(config *ClientConfig) (*Client, error) {
 
-	err := checkIpcName(ipcName)
+	cm, err := NewClient(config.Name+"_manager", config)
+	if err != nil {
+		return nil, err
+	}
+
+	cm, err = start(cm)
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = cm.Write(CLIENT_CONNECT_MSGTYPE, []byte("client_id_request"))
+
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		message, err := cm.ReadTimed(5*time.Second, TimeoutMessage)
+
+		msgType := message.MsgType
+		msgData := bytesToInt(message.Data)
+
+		if err == nil && msgType == CLIENT_CONNECT_MSGTYPE && msgData > 0 {
+
+			cm.logger.Infof("Attempting to create a new Client %d, %s", msgData, message.Data)
+
+			cc, err := NewClient(config.Name, config)
+			if err != nil {
+				return nil, err
+			}
+			cc.ClientId = msgData
+			cm.Close()
+			return start(cc)
+		} else {
+			cm.logger.Debugf("err: %s, msgType: %d, msgData: %d", err, msgType, msgData)
+		}
+	}
+}
+
+func NewClient(name string, config *ClientConfig) (*Client, error) {
+	err := checkIpcName(name)
 	if err != nil {
 		return nil, err
 
 	}
-
-	cc := &Client{Actor: NewActor(&ActorConfig{
-		Name:         ipcName,
+	actor := NewActor(&ActorConfig{
+		Name:         name,
 		ClientConfig: config,
-	})}
+	})
+
+	cc := &Client{
+		Actor: actor,
+	}
+
+	actor.ClientRef = cc
 
 	if config == nil {
 
@@ -42,11 +89,18 @@ func StartClient(ipcName string, config *ClientConfig) (*Client, error) {
 		}
 	}
 
-	return start(cc)
+	return cc, err
+}
+
+func (c *Client) getSocketName() string {
+	if c.ClientId > 0 {
+		return fmt.Sprintf("%s%s%d%s", SOCKET_NAME_BASE, c.name, c.ClientId, SOCKET_NAME_EXT)
+	} else {
+		return fmt.Sprintf("%s%s%s", SOCKET_NAME_BASE, c.name, SOCKET_NAME_EXT)
+	}
 }
 
 func start(c *Client) (*Client, error) {
-
 	go c.dispatchStatus(Connecting)
 
 	if c.timeout != 0 {
@@ -91,15 +145,15 @@ func start(c *Client) (*Client, error) {
 		}
 	} else {
 		err := c.dial()
+
 		if err != nil {
 			c.dispatchError(err)
 			return c, err
 		}
 	}
 
-	go c.read()
+	go c.read(c.ByteReader)
 	go c.write()
-
 	go c.dispatchStatus(Connected)
 
 	return c, nil
@@ -107,9 +161,6 @@ func start(c *Client) (*Client, error) {
 
 // Client connect to the unix socket created by the server -  for unix and linux
 func (c *Client) dial() error {
-
-	base := "/tmp/"
-	sock := ".sock"
 
 	startTime := time.Now()
 
@@ -124,21 +175,23 @@ func (c *Client) dial() error {
 				return errors.New("timed out trying to connect")
 			}
 		}
-
-		conn, err := net.Dial("unix", base+c.name+sock)
+		conn, err := net.Dial("unix", c.getSocketName())
 		if err != nil {
 			c.logger.Debugf("Client.dial err: %s", err)
 			//connect: no such file or directory happens a lot when the client connection closes under normal circumstances
 			if !strings.Contains(err.Error(), "connect: no such file or directory") &&
 				!strings.Contains(err.Error(), "connect: connection refused") {
 				c.dispatchError(err)
+
+			} else {
+				time.Sleep(time.Second * 1)
 			}
 
 		} else {
 
 			c.conn = conn
 
-			err = c.handshake()
+			err = c.handshake(&conn)
 			if err != nil {
 				c.logger.Errorf("Client.dial handshake err: %s", err)
 				return err
@@ -151,49 +204,22 @@ func (c *Client) dial() error {
 	}
 }
 
-func (a *Client) read() {
-	bLen := make([]byte, 4)
+func (c *Client) ByteReader(a *Actor, buff []byte) bool {
 
-	for {
-		res := a.readData(bLen)
-		if !res {
-			break
-		}
-
-		mLen := bytesToInt(bLen)
-
-		msgRecvd := make([]byte, mLen)
-
-		res = a.readData(msgRecvd)
-		if !res {
-			break
-		}
-
-		if bytesToInt(msgRecvd[:4]) == 0 {
-			//  type 0 = control message
-			a.logger.Debugf("Client.read - control message encountered")
-		} else {
-			a.received <- &Message{Data: msgRecvd[4:], MsgType: bytesToInt(msgRecvd[:4])}
-		}
-	}
-}
-
-func (c *Client) readData(buff []byte) bool {
-
-	_, err := io.ReadFull(c.conn, buff)
+	_, err := io.ReadFull(a.conn, buff)
 	if err != nil {
-		c.logger.Debugf("Client.readData err: %s", err)
+		a.logger.Debugf("Client.readData err: %s", err)
 		if c.status == Closing {
-			c.dispatchStatus(Closed)
-			c.dispatchErrorStr("client has closed the connection")
+			a.dispatchStatus(Closed)
+			a.dispatchErrorStr("client has closed the connection")
 			return false
 		}
 
 		if err == io.EOF { // the connection has been closed by the client.
-			c.conn.Close()
+			a.conn.Close()
 
-			if c.status != Closing {
-				go c.reconnect()
+			if a.status != Closing {
+				go reconnect(c)
 			}
 			return false
 		}
@@ -205,7 +231,7 @@ func (c *Client) readData(buff []byte) bool {
 	return true
 }
 
-func (c *Client) reconnect() {
+func reconnect(c *Client) {
 
 	c.logger.Warn("Client.reconnect called")
 	c.dispatchStatus(ReConnecting)
@@ -223,5 +249,21 @@ func (c *Client) reconnect() {
 
 	c.dispatchStatus(Connected)
 
-	go c.read()
+	go c.read(c.ByteReader)
+}
+
+// getStatus - get the current status of the connection
+func (c *Client) String() string {
+	return fmt.Sprintf("Client(%d)", c.ClientId)
+}
+
+func (a *Client) dispatchStatus(status Status) {
+	a.logger.Debugf("Actor.dispacthStatus(%s): %s", a.String(), a.Status())
+	a.status = status
+	a.received <- &Message{Status: a.Status(), MsgType: -1}
+}
+
+func (a *Client) dispatchError(err error) {
+	a.logger.Debugf("Actor.dispacthError(%s): %s", a.String(), err)
+	a.received <- &Message{Err: err, MsgType: -1}
 }
