@@ -7,21 +7,19 @@ import (
 )
 
 type Actor struct {
-	name       string
-	status     Status
-	conn       net.Conn
-	received   chan (*Message)
-	toWrite    chan (*Message)
-	maxMsgSize int
-	isServer   bool
-	logger     *logrus.Logger
+	status    Status
+	conn      net.Conn
+	received  chan (*Message)
+	toWrite   chan (*Message)
+	logger    *logrus.Logger
+	config    *ActorConfig
+	clientRef *Client
 }
 
 // Server - holds the details of the server connection & config.
 type Server struct {
 	Actor
 	listener      net.Listener
-	unMask        bool
 	ServerManager *ServerManager
 }
 
@@ -31,11 +29,10 @@ type Client struct {
 	timeout    time.Duration //
 	retryTimer time.Duration // number of seconds before trying to connect again
 	ClientId   int
+	maxMsgSize int //set in the handshake process dictated by the ServerConfig.MaxMsgSize value
 }
 
 type ActorConfig struct {
-	Name         string
-	MaxMsgSize   int
 	IsServer     bool
 	ServerConfig *ServerConfig
 	ClientConfig *ClientConfig
@@ -48,6 +45,7 @@ type ServerConfig struct {
 	UnmaskPermissions bool
 	LogLevel          string
 	MultiClient       bool
+	Encryption        bool
 }
 
 // ClientConfig - used to pass configuation overrides to ClientStart()
@@ -57,6 +55,7 @@ type ClientConfig struct {
 	RetryTimer  time.Duration
 	LogLevel    string
 	MultiClient bool
+	Encryption  bool
 }
 
 type ServerManager struct {

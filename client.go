@@ -19,6 +19,41 @@ func StartClient(config *ClientConfig) (*Client, error) {
 	}
 }
 
+func NewClient(name string, config *ClientConfig) (*Client, error) {
+	err := checkIpcName(name)
+	if err != nil {
+		return nil, err
+
+	}
+
+	if config == nil {
+		config = &ClientConfig{
+			Name: name,
+		}
+	}
+
+	cc := &Client{Actor: NewActor(&ActorConfig{
+		ClientConfig: config,
+	})}
+	cc.clientRef = cc
+
+	config.Name = name
+
+	if config.Timeout < 0 {
+		cc.timeout = 0
+	} else {
+		cc.timeout = config.Timeout
+	}
+
+	if config.RetryTimer < 0 {
+		cc.retryTimer = 0
+	} else {
+		cc.retryTimer = config.RetryTimer
+	}
+
+	return cc, err
+}
+
 func StartOnlyClient(config *ClientConfig) (*Client, error) {
 	cc, err := NewClient(config.Name, config)
 	if err != nil {
@@ -30,7 +65,10 @@ func StartOnlyClient(config *ClientConfig) (*Client, error) {
 
 func StartMultiClient(config *ClientConfig) (*Client, error) {
 
-	cm, err := NewClient(config.Name+"_manager", config)
+	//well be modifying the config.Name property by reference
+	configName := config.Name
+
+	cm, err := NewClient(configName+"_manager", config)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +95,7 @@ func StartMultiClient(config *ClientConfig) (*Client, error) {
 
 			cm.logger.Infof("Attempting to create a new Client %d, %s", msgData, message.Data)
 
-			cc, err := NewClient(config.Name, config)
+			cc, err := NewClient(configName, config)
 			if err != nil {
 				return nil, err
 			}
@@ -70,47 +108,11 @@ func StartMultiClient(config *ClientConfig) (*Client, error) {
 	}
 }
 
-func NewClient(name string, config *ClientConfig) (*Client, error) {
-	err := checkIpcName(name)
-	if err != nil {
-		return nil, err
-
-	}
-
-	cc := &Client{
-		Actor: NewActor(&ActorConfig{
-			Name:         name,
-			ClientConfig: config,
-		}),
-	}
-
-	if config == nil {
-
-		cc.timeout = 0
-		cc.retryTimer = 0
-
-	} else {
-		if config.Timeout < 0 {
-			cc.timeout = 0
-		} else {
-			cc.timeout = config.Timeout
-		}
-
-		if config.RetryTimer < 0 {
-			cc.retryTimer = 0
-		} else {
-			cc.retryTimer = config.RetryTimer
-		}
-	}
-
-	return cc, err
-}
-
 func (c *Client) getSocketName() string {
 	if c.ClientId > 0 {
-		return fmt.Sprintf("%s%s%d%s", SOCKET_NAME_BASE, c.name, c.ClientId, SOCKET_NAME_EXT)
+		return fmt.Sprintf("%s%s%d%s", SOCKET_NAME_BASE, c.config.ClientConfig.Name, c.ClientId, SOCKET_NAME_EXT)
 	} else {
-		return fmt.Sprintf("%s%s%s", SOCKET_NAME_BASE, c.name, SOCKET_NAME_EXT)
+		return fmt.Sprintf("%s%s%s", SOCKET_NAME_BASE, c.config.ClientConfig.Name, SOCKET_NAME_EXT)
 	}
 }
 

@@ -207,7 +207,7 @@ func TestWrite(t *testing.T) {
 		t.Error("0 is not allowed as a message type")
 	}
 
-	buf = make([]byte, sc.maxMsgSize+5)
+	buf = make([]byte, sc.config.ServerConfig.MaxMsgSize+5)
 	err4 := sc.Write(2, buf)
 
 	if err4.Error() != "message exceeds maximum message length" {
@@ -251,7 +251,6 @@ func TestWrite(t *testing.T) {
 func TestRead(t *testing.T) {
 
 	sIPC := &Server{Actor: Actor{
-		name:     "Test",
 		status:   NotConnected,
 		received: make(chan *Message),
 	}}
@@ -291,7 +290,7 @@ func TestRead(t *testing.T) {
 
 	// 3 x client side tests
 	cIPC := &Client{
-		Actor:      Actor{name: "test", status: NotConnected, received: make(chan *Message)},
+		Actor:      Actor{status: NotConnected, received: make(chan *Message)},
 		timeout:    2 * time.Second,
 		retryTimer: 1,
 	}
@@ -1621,9 +1620,9 @@ func TestServerReceiveWrongVersionNumberMulti(t *testing.T) {
 			t.Error(err)
 		}
 		cc.conn = conn
-
+		Sleep()
 		recv := make([]byte, 2)
-		_, err2 = cc.conn.Read(recv)
+		_, err2 = conn.Read(recv)
 		if err2 != nil {
 			return
 		}

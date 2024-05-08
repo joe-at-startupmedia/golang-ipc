@@ -36,13 +36,11 @@ func NewActor(ac *ActorConfig) Actor {
 	})
 
 	return Actor{
-		name:       ac.Name,
-		status:     NotConnected,
-		received:   make(chan *Message),
-		toWrite:    make(chan *Message),
-		maxMsgSize: ac.MaxMsgSize,
-		isServer:   ac.IsServer,
-		logger:     logger,
+		status:   NotConnected,
+		received: make(chan *Message),
+		toWrite:  make(chan *Message),
+		logger:   logger,
+		config:   ac,
 	}
 }
 
@@ -60,7 +58,7 @@ func (a *Actor) Read() (*Message, error) {
 
 	if m.Err != nil {
 		a.logger.Errorf("Actor.Read err: %s", m.Err)
-		if !a.isServer {
+		if !a.config.IsServer {
 			close(a.received)
 			close(a.toWrite)
 		}
@@ -126,12 +124,12 @@ func (a *Actor) Write(msgType int, message []byte) error {
 		return err
 	}
 
-	if a.isServer && a.status == Listening {
+	if a.config.IsServer && a.status == Listening {
 		time.Sleep(time.Millisecond * 2)
 		a.logger.Infoln("Server is still listening so lets use recursion")
 		//it's possible the client hasn't connected yet so retry it
 		return a.Write(msgType, message)
-	} else if !a.isServer && a.status == Connecting {
+	} else if !a.config.IsServer && a.status == Connecting {
 		a.logger.Infoln("Client is still connecting so lets use recursion")
 		time.Sleep(time.Millisecond * 100)
 		return a.Write(msgType, message)
@@ -142,9 +140,15 @@ func (a *Actor) Write(msgType int, message []byte) error {
 	}
 
 	mlen := len(message)
-	if mlen > a.maxMsgSize {
+	if a.config.IsServer {
+		if mlen > a.config.ServerConfig.MaxMsgSize {
+			err := errors.New("message exceeds maximum message length")
+			a.logger.Errorf("Server.Write err: %s", err)
+			return err
+		}
+	} else if mlen > a.clientRef.maxMsgSize {
 		err := errors.New("message exceeds maximum message length")
-		a.logger.Errorf("Actor.Write err: %s", err)
+		a.logger.Errorf("Client.Write err: %s", err)
 		return err
 	}
 
@@ -233,7 +237,7 @@ func (a *Actor) dispatchError(err error) {
 }
 
 func (a *Actor) getRole() string {
-	if a.isServer {
+	if a.config.IsServer {
 		return "Server"
 	} else {
 		return "Client"

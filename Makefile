@@ -16,7 +16,7 @@ test:
 	$(GO) test -v
 
 .PHONY: examples
-examples: 
+examples: build 
 	./bin/simple
 	./bin/timed
 	./bin/multiclient

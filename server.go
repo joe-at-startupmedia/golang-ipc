@@ -21,6 +21,31 @@ func StartServer(config *ServerConfig) (*Server, error) {
 	}
 }
 
+func NewServer(name string, config *ServerConfig) (*Server, error) {
+	err := checkIpcName(name)
+	if err != nil {
+		return nil, err
+	}
+	config.Name = name
+	s := &Server{Actor: NewActor(&ActorConfig{
+		IsServer:     true,
+		ServerConfig: config,
+	})}
+
+	if config == nil {
+		serverConfig := &ServerConfig{
+			MaxMsgSize: MAX_MSG_SIZE,
+		}
+		s.config.ServerConfig = serverConfig
+	} else {
+
+		if config.MaxMsgSize < 1024 {
+			s.config.ServerConfig.MaxMsgSize = MAX_MSG_SIZE
+		}
+	}
+	return s, err
+}
+
 func StartOnlyServer(config *ServerConfig) (*Server, error) {
 
 	s, err := NewServer(config.Name, config)
@@ -38,7 +63,10 @@ func StartOnlyServer(config *ServerConfig) (*Server, error) {
 
 func StartMultiServer(config *ServerConfig) (*Server, error) {
 
-	cms, err := NewServer(config.Name+"_manager", config)
+	//well be modifying the config.Name property by reference
+	configName := config.Name
+
+	cms, err := NewServer(configName+"_manager", config)
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +75,7 @@ func StartMultiServer(config *ServerConfig) (*Server, error) {
 		return nil, err
 	}
 
-	s, err := NewServer(config.Name, config)
+	s, err := NewServer(configName, config)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +96,7 @@ func StartMultiServer(config *ServerConfig) (*Server, error) {
 
 			if err == nil && msgType == CLIENT_CONNECT_MSGTYPE && msgData == "client_id_request" {
 				cms.logger.Infof("recieved a request to create a new client server %d", ClientCount+1)
-				ns, err := NewServer(config.Name, config)
+				ns, err := NewServer(configName, config)
 				if err == nil {
 					ClientCount++
 					cms.Write(CLIENT_CONNECT_MSGTYPE, intToBytes(ClientCount))
@@ -127,42 +155,14 @@ func (sm *ServerManager) ReadTimed(duration time.Duration, timeoutMessage *Messa
 	}, "ReadTimed")
 }
 
-func NewServer(name string, config *ServerConfig) (*Server, error) {
-	err := checkIpcName(name)
-	if err != nil {
-		return nil, err
-	}
-
-	s := &Server{Actor: NewActor(&ActorConfig{
-		Name:         name,
-		IsServer:     true,
-		ServerConfig: config,
-	})}
-
-	if config == nil {
-		s.maxMsgSize = MAX_MSG_SIZE
-		s.unMask = false
-	} else {
-
-		if config.MaxMsgSize < 1024 {
-			s.maxMsgSize = MAX_MSG_SIZE
-		} else {
-			s.maxMsgSize = config.MaxMsgSize
-		}
-
-		s.unMask = config.UnmaskPermissions
-	}
-	return s, err
-}
-
 func (s *Server) run(clientId int) (*Server, error) {
 
 	var socketName string
 
 	if clientId > 0 {
-		socketName = fmt.Sprintf("%s%s%d%s", SOCKET_NAME_BASE, s.name, clientId, SOCKET_NAME_EXT)
+		socketName = fmt.Sprintf("%s%s%d%s", SOCKET_NAME_BASE, s.config.ServerConfig.Name, clientId, SOCKET_NAME_EXT)
 	} else {
-		socketName = fmt.Sprintf("%s%s%s", SOCKET_NAME_BASE, s.name, SOCKET_NAME_EXT)
+		socketName = fmt.Sprintf("%s%s%s", SOCKET_NAME_BASE, s.config.ServerConfig.Name, SOCKET_NAME_EXT)
 	}
 
 	if err := os.RemoveAll(socketName); err != nil {
@@ -170,7 +170,7 @@ func (s *Server) run(clientId int) (*Server, error) {
 	}
 
 	var oldUmask int
-	if s.unMask {
+	if s.config.ServerConfig.UnmaskPermissions {
 		oldUmask = syscall.Umask(0)
 	}
 
@@ -178,7 +178,7 @@ func (s *Server) run(clientId int) (*Server, error) {
 
 	s.listener = listener
 
-	if s.unMask {
+	if s.config.ServerConfig.UnmaskPermissions {
 		syscall.Umask(oldUmask)
 	}
 

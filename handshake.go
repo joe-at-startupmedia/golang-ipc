@@ -53,7 +53,7 @@ func (sc *Server) one(conn net.Conn) error {
 func (sc *Server) msgLength(conn net.Conn) error {
 
 	buff := make([]byte, 4)
-	binary.BigEndian.PutUint32(buff, uint32(sc.maxMsgSize))
+	binary.BigEndian.PutUint32(buff, uint32(sc.config.ServerConfig.MaxMsgSize))
 
 	toSend := make([]byte, 4)
 	binary.BigEndian.PutUint32(toSend, uint32(len(buff)))
