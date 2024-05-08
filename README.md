@@ -1,27 +1,18 @@
 # golang-ipc
- Golang Inter-process communication library for Window, Mac and Linux.
+ Golang Inter-process communication library for Mac and Linux forked from [https://github.com/james-barrow/golang-ipc](james-barrow/golang-ipc) with the following features added:
+ * Adds the ability to spawn multiple clients
+ * Adds ReadTimed methods which return after a set time.Duration
+ * Adds ServerManager instance to easily poll read requests from multiple clients
+ * Adds improved logging for better visibility
+ * Not a feature but encryption and windows support have been temporarily removed
 
-
- ### Overview
+### Overview
  
- A simple to use package that uses unix sockets on Macos/Linux and named pipes on Windows to create a communication channel between two go processes.
+ A simple to use package that uses unix sockets on Macos/Linux to create a communication channel between two go processes.
 
 ### Intergration
 
 As well as using this library just for go processes it was also designed to work with other languages, with the go process as the server and the other languages processing being the client.
-
-
-#### NodeJs
-
-I currently use this library to comunicate between a ElectronJS GUI and a go program.
-
-Below is a link to the nodeJS client library:
-
-https://github.com/james-barrow/node-ipc-client
-
-#### Python 
-
-To do
 
 ## Usage
 
@@ -29,7 +20,7 @@ Create a server with the default configuation and start listening for the client
 
 ```go
 
-	s, err := ipc.StartServer("<name of socket or pipe>", nil)
+	s, err := ipc.StartServer(&ServerConfig{Name:"<name of socket or pipe>"}
 	if err != nil {
 		log.Println(err)
 		return
@@ -40,7 +31,7 @@ Create a client and connect to the server:
 
 ```go
 
-	c, err := ipc.StartClient("<name of socket or pipe>", nil)
+	c, err := ipc.StartClient(&ClientConfig{Name:"<name of socket or pipe>"})
 	if err != nil {
 		log.Println(err)
 		return
@@ -50,13 +41,13 @@ Create a client and connect to the server:
 
 ### Read messages 
 
-Read each message sent:
+Read each message sent (blocking):
 
 ```go
 
     for {
 
-        // message, err := s.Read() server 
+        //message, err := s.Read() // server
         message, err := c.Read() // client
 
         if err == nil {
@@ -66,6 +57,38 @@ Read each message sent:
         // do something with the received messages
     }
 
+```
+
+Read each message sent until a specific duration has surpassed. 
+
+```go
+
+  for {
+
+    message, err := c.ReadTimed(5*time.Second, ipc.TimeoutMessage)
+
+    if err == nil && c.StatusCode() != ipc.Connecting {
+
+    } else if message != ipc.TimeoutMessage {
+
+    }
+```
+
+Allow polling of newly created clients on each iteration until a specific duration has surpassed. 
+
+```go
+
+  for {
+    srv.ServerManager.ReadTimed(5*time.Second, ipc.TimeoutMessage, func(s *ipc.Server, message *ipc.Message, err error) {
+      if err == nil {
+
+	if message.MsgType == -1 && message.Status == "Connected" {
+	
+	} else if message != ipc.TimeoutMessage {
+	
+	}
+    })
+  }
 ```
 
 All received messages are formated into the type Message
@@ -86,7 +109,7 @@ type Message struct {
 
 ```go
 
-	//err := s.Write(1, []byte("<Message for client"))
+    err := s.Write(1, []byte("<Message for client"))
     err := c.Write(1, []byte("<Message for server"))
 
     if err == nil {
@@ -102,9 +125,10 @@ Server options:
 ```go
 
     config := &ipc.ServerConfig{
-		Encryption: (bool),        // allows encryption to be switched off (bool - default is true)
+	Encryption: (bool),        // allows encryption to be switched off (bool - default is true)
         MaxMsgSize: (int) ,        // the maximum size in bytes of each message ( default is 3145728 / 3Mb)
-	    UnmaskPermissions: (bool), // make the socket writeable for other users (default is false)
+	UnmaskPermissions: (bool), // make the socket writeable for other users (default is false)
+        MultiMode: (bool)          // allow the server to connect with multiple clients
     }
 
 
@@ -127,7 +151,7 @@ Client options:
 
  By default the connection established will be encypted, ECDH384 is used for the key exchange and AES 256 GCM is used for the cipher.
 
- Encryption can be swithed off by passing in a custom configuation to the server & client start function:
+ Encryption can be switched off by passing in a custom configuation to the server & client start function:
 
 ```go
 	Encryption: false
@@ -148,7 +172,7 @@ Client options:
 
  ## Testing
 
- The package has been tested on Mac, Windows and Linux and has extensive test coverage.
+ The package has been tested on Mac and Linux and has extensive test coverage.
 
 ## Licence
 
