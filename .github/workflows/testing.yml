@@ -38,7 +38,7 @@ jobs:
     needs: test
     strategy:
      matrix:
-       os: [ ubuntu-latest, windows-latest, macOS-latest ]
+       os: [ ubuntu-latest, macOS-latest ]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -62,16 +62,14 @@ jobs:
 
       - name: Build arm64
         if: |
-          matrix.os != 'macOS-latest' &&
-          matrix.os != 'windows-latest'
+          matrix.os != 'macOS-latest'
         run: |
           GOARCH=arm64 go build -v ./...
         shell: bash
 
       - name: Build arm
         if: |
-          matrix.os != 'macOS-latest' &&
-          matrix.os != 'windows-latest'
+          matrix.os != 'macOS-latest'
         run: |
           GOARCH=arm go build -v ./...
         shell: bash
