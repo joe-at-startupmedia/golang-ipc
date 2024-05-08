@@ -118,7 +118,7 @@ func (c *Client) getSocketName() string {
 }
 
 func start(c *Client) (*Client, error) {
-	go c.dispatchStatus(Connecting)
+	c.dispatchStatus(Connecting)
 
 	if c.timeout != 0 {
 
@@ -171,7 +171,7 @@ func start(c *Client) (*Client, error) {
 
 	go c.read(c.ByteReader)
 	go c.write()
-	go c.dispatchStatus(Connected)
+	c.dispatchStatus(Connected)
 
 	return c, nil
 }
@@ -226,8 +226,8 @@ func (c *Client) ByteReader(a *Actor, buff []byte) bool {
 	if err != nil {
 		a.logger.Debugf("Client.readData err: %s", err)
 		if c.status == Closing {
-			a.dispatchStatus(Closed)
-			a.dispatchErrorStr("client has closed the connection")
+			a.dispatchStatusBlocking(Closed)
+			a.dispatchErrorStrBlocking("client has closed the connection")
 			return false
 		}
 
@@ -256,8 +256,8 @@ func reconnect(c *Client) {
 	if err != nil {
 		c.logger.Errorf("Client.reconnect -> dial err: %s", err)
 		if err.Error() == "timed out trying to connect" {
-			c.dispatchStatus(Timeout)
-			c.dispatchErrorStr("timed out trying to re-connect")
+			c.dispatchStatusBlocking(Timeout)
+			c.dispatchErrorStrBlocking("timed out trying to re-connect")
 		}
 
 		return
@@ -271,15 +271,4 @@ func reconnect(c *Client) {
 // getStatus - get the current status of the connection
 func (c *Client) String() string {
 	return fmt.Sprintf("Client(%d)", c.ClientId)
-}
-
-func (a *Client) dispatchStatus(status Status) {
-	a.logger.Debugf("Actor.dispacthStatus(%s): %s", a.String(), a.Status())
-	a.status = status
-	a.received <- &Message{Status: a.Status(), MsgType: -1}
-}
-
-func (a *Client) dispatchError(err error) {
-	a.logger.Debugf("Actor.dispacthError(%s): %s", a.String(), err)
-	a.received <- &Message{Err: err, MsgType: -1}
 }

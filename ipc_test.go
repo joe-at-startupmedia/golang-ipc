@@ -1651,3 +1651,95 @@ func TestServerReceiveWrongVersionNumberMulti(t *testing.T) {
 		}
 	}
 }
+
+func TestServerWrongEncryption(t *testing.T) {
+
+	scon := serverConfig("testl337_enc")
+	scon.Encryption = false
+	sc, err := StartServer(scon)
+	if err != nil {
+		t.Error(err)
+	}
+
+	Sleep()
+	ccon := clientConfig("testl337_enc")
+	ccon.Encryption = true
+	cc, err2 := StartClient(ccon)
+	if err2 != nil {
+		if err2.Error() != "server tried to connect without encryption" {
+			t.Error(err2)
+		}
+	}
+
+	go func() {
+		for {
+			m, err := cc.Read()
+			cc.logger.Debugf("Message: %v, err %s", m, err)
+			if err != nil {
+				if err.Error() != "server tried to connect without encryption" && m.MsgType != -2 {
+					t.Error(err)
+				}
+				break
+			}
+		}
+	}()
+
+	for {
+		mm, err2 := sc.Read()
+		sc.logger.Debugf("Message: %v, err %s", mm, err)
+		if err2 != nil {
+			if err2.Error() != "client is enforcing encryption" && mm.MsgType != -2 {
+				t.Error(err2)
+			} else {
+				break
+			}
+			break
+		}
+	}
+}
+
+func TestServerWrongEncryption2(t *testing.T) {
+
+	scon := serverConfig("testl338_enc")
+	scon.Encryption = true
+	sc, err := StartServer(scon)
+	if err != nil {
+		t.Error(err)
+	}
+
+	Sleep()
+	ccon := clientConfig("testl338_enc")
+	ccon.Encryption = false
+	cc, err2 := StartClient(ccon)
+	if err2 != nil {
+		if err2.Error() != "server tried to connect without encryption" {
+			t.Error(err2)
+		}
+	}
+
+	go func() {
+		for {
+			m, err := cc.Read()
+			cc.logger.Debugf("Message: %v, err %s", m, err)
+			if err != nil {
+				if err.Error() != "server tried to connect without encryption" && m.MsgType != -2 {
+					t.Error(err)
+				}
+				break
+			}
+		}
+	}()
+
+	for {
+		mm, err2 := sc.Read()
+		sc.logger.Debugf("Message: %v, err %s", mm, err2)
+		if err2 != nil {
+			if err2.Error() != "public key received isn't valid length 97, got: 1" {
+				t.Error(err2)
+			} else {
+				break
+			}
+			break
+		}
+	}
+}

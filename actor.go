@@ -179,7 +179,7 @@ func (a *Actor) read(readBytesCb func(*Actor, []byte) bool) {
 			var err error
 			msgRecvd, err = decrypt(*a.cipher, msgRecvd)
 			if err != nil {
-				a.received <- &Message{Err: err, MsgType: -1}
+				a.dispatchError(err)
 				continue
 			}
 		}
@@ -213,7 +213,7 @@ func (a *Actor) write() {
 			var err error
 			toSend, err = encrypt(*a.cipher, toSend)
 			if err != nil {
-				a.received <- &Message{Err: err, MsgType: -1}
+				a.dispatchError(err)
 				continue
 			}
 		}
@@ -240,24 +240,38 @@ func (a *Actor) write() {
 	}
 }
 
-func (a *Actor) dispatchStatus(status Status) {
+func (a *Actor) dispatchStatusBlocking(status Status) {
 	a.logger.Debugf("Actor.dispacthStatus(%s): %s", a.getRole(), a.Status())
 	a.status = status
-	a.received <- &Message{Status: a.Status(), MsgType: -1}
+	a.received <- &Message{Status: status.String(), MsgType: -1}
 }
 
-func (a *Actor) dispatchErrorStr(err string) {
+func (a *Actor) dispatchErrorStrBlocking(err string) {
 	a.dispatchError(errors.New(err))
 }
 
-func (a *Actor) dispatchError(err error) {
+func (a *Actor) dispatchErrorBlocking(err error) {
 	a.logger.Debugf("Actor.dispacthError(%s): %s", a.getRole(), err)
 	a.received <- &Message{Err: err, MsgType: -1}
+}
+
+func (a *Actor) dispatchStatus(status Status) {
+	go a.dispatchStatusBlocking(status)
+}
+
+func (a *Actor) dispatchErrorStr(err string) {
+	go a.dispatchErrorStrBlocking(err)
+}
+
+func (a *Actor) dispatchError(err error) {
+	go a.dispatchErrorBlocking(err)
 }
 
 func (a *Actor) getRole() string {
 	if a.config.IsServer {
 		return "Server"
+	} else if a.clientRef != nil && a.clientRef.ClientId != 0 {
+		return fmt.Sprintf("Client(%d)", a.clientRef.ClientId)
 	} else {
 		return "Client"
 	}

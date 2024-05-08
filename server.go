@@ -92,6 +92,11 @@ func StartMultiServer(config *ServerConfig) (*Server, error) {
 		for {
 
 			message, err := cms.Read()
+			if err != nil {
+				s.logger.Errorf("ServerManager.read err: %s", err)
+				s.dispatchError(err)
+				continue
+			}
 			msgType := message.MsgType
 			msgData := string(message.Data)
 
@@ -234,9 +239,8 @@ func (s *Server) ByteReader(a *Actor, buff []byte) bool {
 	if err != nil {
 
 		if a.status == Closing {
-
-			a.dispatchStatus(Closed)
-			a.dispatchErrorStr("server has closed the connection")
+			a.dispatchStatusBlocking(Closed)
+			a.dispatchErrorStrBlocking("server has closed the connection")
 			return false
 		}
 
