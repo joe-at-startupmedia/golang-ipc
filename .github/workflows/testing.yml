@@ -30,7 +30,7 @@ jobs:
       shell: bash
 
     - name: Test
-      run: IPC_CLIENT_CONNECT_WAIT=0 go test --trace -v ./...
+      run: IPC_CLIENT_CONNECT_WAIT=0 go test --race -v ./...
       shell: bash
 
   build:
