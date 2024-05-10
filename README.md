@@ -163,7 +163,7 @@ make test && make run
 
 You can change the speed of the tests by providing a value for the `IPC_CLIENT_CONNECT_WAIT` environment variable. A value `> 5` will specify the amount of milliseconds to wait in between critical intervals whereas a value `<= 5` will resolve to the amount of seconds to wait in between the same. The default value is 10 milliseconds. You can also provide the `IPC_DEBUG=true` environment variable to set the `logrus.Loglevel` to debug mode. The following command will make the tests run in debug mode while waiting 500ms in between critical intervals:
 
-```
+```bash
 IPC_CLIENT_CONNECT_WAIT=500 IPC_DEBUG=true make test
 ```
 
