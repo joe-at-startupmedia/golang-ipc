@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"github.com/sirupsen/logrus"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 // checks the name passed into the start function to ensure it's ok/will work.
@@ -68,5 +69,10 @@ func GetDefaultClientConnectWait() int {
 
 // Sleep change the sleep time by using IPC_CLIENT_CONNECT_WAIT env variable (seconds)
 func Sleep() {
-	time.Sleep(time.Duration(GetDefaultClientConnectWait()) * time.Second)
+	wait := GetDefaultClientConnectWait()
+	if wait > 5 {
+		time.Sleep(time.Duration(wait) * time.Millisecond)
+	} else {
+		time.Sleep(time.Duration(wait) * time.Second)
+	}
 }
