@@ -5,15 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/sirupsen/logrus"
+	"net"
 	"os"
+	"sync"
 	"time"
 )
 
 var TimeoutMessage = &Message{MsgType: 2, Err: errors.New("timed_out")}
-
-type ActorInterface interface {
-	String() string
-}
 
 func NewActor(ac *ActorConfig) Actor {
 
@@ -41,6 +39,7 @@ func NewActor(ac *ActorConfig) Actor {
 		toWrite:  make(chan *Message),
 		logger:   logger,
 		config:   ac,
+		mutex:    &sync.Mutex{},
 	}
 }
 
@@ -124,17 +123,19 @@ func (a *Actor) Write(msgType int, message []byte) error {
 		return err
 	}
 
-	if a.config.IsServer && a.status == Listening {
+	status := a.getStatus()
+
+	if a.config.IsServer && status == Listening {
 		time.Sleep(time.Millisecond * 2)
 		a.logger.Infoln("Server is still listening so lets use recursion")
 		//it's possible the client hasn't connected yet so retry it
 		return a.Write(msgType, message)
-	} else if !a.config.IsServer && a.status == Connecting {
+	} else if !a.config.IsServer && status == Connecting {
 		a.logger.Infoln("Client is still connecting so lets use recursion")
 		time.Sleep(time.Millisecond * 100)
 		return a.Write(msgType, message)
-	} else if a.status != Connected {
-		err := errors.New(fmt.Sprintf("cannot write under current status: %s", a.status.String()))
+	} else if status != Connected {
+		err := errors.New(fmt.Sprintf("cannot write under current status: %s", a.Status()))
 		a.logger.Errorf("Actor.Write err: %s", err)
 		return err
 	}
@@ -207,7 +208,7 @@ func (a *Actor) write() {
 		}
 
 		toSend := append(intToBytes(m.MsgType), m.Data...)
-		writer := bufio.NewWriter(a.conn)
+		writer := bufio.NewWriter(a.getConn())
 
 		if a.shouldUseEncryption() {
 			var err error
@@ -242,7 +243,7 @@ func (a *Actor) write() {
 
 func (a *Actor) dispatchStatusBlocking(status Status) {
 	a.logger.Debugf("Actor.dispacthStatus(%s): %s", a.getRole(), a.Status())
-	a.status = status
+	a.setStatus(status)
 	a.received <- &Message{Status: status.String(), MsgType: -1}
 }
 
@@ -279,26 +280,48 @@ func (a *Actor) getRole() string {
 
 // getStatus - get the current status of the connection
 func (a *Actor) getStatus() Status {
-	return a.status
+	a.mutex.Lock()
+	status := a.status
+	a.mutex.Unlock()
+	return status
+}
+
+func (a *Actor) setStatus(status Status) {
+	a.mutex.Lock()
+	a.status = status
+	a.mutex.Unlock()
+}
+
+func (a *Actor) getConn() net.Conn {
+	a.mutex.Lock()
+	conn := a.conn
+	a.mutex.Unlock()
+	return conn
+}
+
+func (a *Actor) setConn(conn net.Conn) {
+	a.mutex.Lock()
+	a.conn = conn
+	a.mutex.Unlock()
 }
 
 // StatusCode - returns the current connection status
 func (a *Actor) StatusCode() Status {
-	return a.status
+	return a.getStatus()
 }
 
 // Status - returns the current connection status as a string
 func (a *Actor) Status() string {
 
-	return a.status.String()
+	return a.getStatus().String()
 }
 
 // Close - closes the connection
 func (a *Actor) Close() {
 
-	a.status = Closing
+	a.setStatus(Closing)
 
 	if a.conn != nil {
-		a.conn.Close()
+		a.getConn().Close()
 	}
 }

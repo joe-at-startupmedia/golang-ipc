@@ -4,6 +4,7 @@ import (
 	"crypto/cipher"
 	"github.com/sirupsen/logrus"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -16,6 +17,7 @@ type Actor struct {
 	config    *ActorConfig
 	cipher    *cipher.AEAD
 	clientRef *Client
+	mutex     *sync.Mutex
 }
 
 // Server - holds the details of the server connection & config.
@@ -64,6 +66,7 @@ type ServerManager struct {
 	Servers      []*Server
 	ServerConfig *ServerConfig
 	Logger       *logrus.Logger
+	mutex        *sync.Mutex
 }
 
 // Message - contains the received message

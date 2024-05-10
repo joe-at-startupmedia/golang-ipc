@@ -215,7 +215,7 @@ func TestWrite(t *testing.T) {
 		t.Errorf("There should be an error as the data we're attempting to write is bigger than the MAX_MSG_SIZE, instead we got: %s", err4)
 	}
 
-	sc.status = NotConnected
+	sc.setStatus(NotConnected)
 
 	buf2 := make([]byte, 5)
 	err5 := sc.Write(2, buf2)
@@ -223,7 +223,7 @@ func TestWrite(t *testing.T) {
 		t.Errorf("we should have an error becuse there is no connection but instead we got: %s", err5)
 	}
 
-	sc.status = Connected
+	sc.setStatus(Connected)
 
 	buf = make([]byte, 1)
 
@@ -238,7 +238,7 @@ func TestWrite(t *testing.T) {
 		t.Error("There should be an error is the data we're attempting to write is bigger than the MAX_MSG_SIZE")
 	}
 
-	cc.status = NotConnected
+	cc.setStatus(NotConnected)
 
 	buf = make([]byte, 5)
 	err = cc.Write(2, buf)
@@ -329,89 +329,77 @@ func TestRead(t *testing.T) {
 
 func TestStatus(t *testing.T) {
 
-	sc := &Server{Actor: Actor{
-		status: NotConnected,
-	}}
+	sc, err := StartServer(serverConfig("test_status"))
+	if err != nil {
+		t.Error(err)
+	}
 
-	s := sc.getStatus()
+	sc.setStatus(NotConnected)
 
-	if s.String() != "Not Connected" {
+	if sc.Status() != "Not Connected" {
 		t.Error("status string should have returned Not Connected")
 	}
 
-	sc.status = Listening
+	sc.setStatus(Listening)
 
-	s1 := sc.getStatus()
-
-	if s1.String() != "Listening" {
+	if sc.Status() != "Listening" {
 		t.Error("status string should have returned Listening")
 	}
 
-	sc.status = Connecting
+	sc.setStatus(Connecting)
 
-	s1 = sc.getStatus()
-
-	if s1.String() != "Connecting" {
+	if sc.Status() != "Connecting" {
 		t.Error("status string should have returned Connecting")
 	}
 
-	sc.status = Connected
+	sc.setStatus(Connected)
 
-	s2 := sc.getStatus()
-
-	if s2.String() != "Connected" {
+	if sc.Status() != "Connected" {
 		t.Error("status string should have returned Connected")
 	}
 
-	sc.status = ReConnecting
+	sc.setStatus(ReConnecting)
 
-	s3 := sc.getStatus()
-
-	if s3.String() != "Reconnecting" {
+	if sc.Status() != "Reconnecting" {
 		t.Error("status string should have returned Reconnecting")
 	}
 
-	sc.status = Closed
+	sc.setStatus(Closed)
 
-	s4 := sc.getStatus()
-
-	if s4.String() != "Closed" {
+	if sc.Status() != "Closed" {
 		t.Error("status string should have returned Closed")
 	}
 
-	sc.status = Error
+	sc.setStatus(Error)
 
-	s5 := sc.getStatus()
-
-	if s5.String() != "Error" {
+	if sc.Status() != "Error" {
 		t.Error("status string should have returned Error")
 	}
 
-	sc.status = Closing
+	sc.setStatus(Closing)
 
-	s6 := sc.getStatus()
-
-	if s6.String() != "Closing" {
+	if sc.Status() != "Closing" {
 		t.Error("status string should have returned Error")
 	}
 
-	if s6.String() != "Closing" {
-		t.Error("status string should have returned Error")
+	_, err = StartServer(serverConfig("test_status2"))
+	if err != nil {
+		t.Error(err)
 	}
-
-	cc := &Client{Actor: Actor{
-		status: NotConnected,
-	}}
+	Sleep()
+	cc, err2 := StartClient(clientConfig("test_status2"))
+	if err2 != nil {
+		t.Error(err)
+	}
+	cc.setStatus(NotConnected)
 
 	cc.getStatus()
 	cc.Status()
 
-	cc2 := &Client{Actor: Actor{
-		status: 9,
-	}}
+	cc.setStatus(9)
 
-	cc2.getStatus()
-	cc2.Status()
+	cc.getStatus()
+	cc.Status()
 }
 
 func TestGetConnected(t *testing.T) {

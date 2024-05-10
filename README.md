@@ -7,7 +7,9 @@ Golang Inter-process communication library for Mac/Linux forked from [james-barr
 * Adds `ReadTimed` methods which return after the `time.Duration` provided
 * Adds a `ServerManager` instance to easily poll read requests from multiple clients
 * Adds improved logging for better visibility
+* Removes race conditions by using `sync.Mutex` locks
 * Removes Windows support (oh wait, that's not a feature?)
+
 
 ### Overview
  

@@ -11,9 +11,17 @@ build:
 	$(GO) build -o bin/timed example/timed/timed.go
 	$(GO) build -o bin/multiclient example/multiclient/multiclient.go
 
+.PHONY: run
+run: 
+	$(GO) mod tidy
+	$(GO) run --race example/simple/simple.go
+	$(GO) run --race example/timed/timed.go
+	$(GO) run --race example/multiclient/multiclient.go
+
+
 .PHONY: test
 test: 
-	$(GO) test -v
+	$(GO) test --race -v
 
 .PHONY: examples
 examples: build 

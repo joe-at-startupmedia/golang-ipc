@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -57,6 +58,7 @@ func StartOnlyServer(config *ServerConfig) (*Server, error) {
 		Servers:      []*Server{{}, s}, //we add an empty server in case we need to MapExec
 		ServerConfig: config,
 		Logger:       s.logger,
+		mutex:        &sync.Mutex{},
 	}
 
 	return s.run(0)
@@ -84,6 +86,7 @@ func StartMultiServer(config *ServerConfig) (*Server, error) {
 		Servers:      []*Server{cms, s},
 		ServerConfig: config,
 		Logger:       s.logger,
+		mutex:        &sync.Mutex{},
 	}
 
 	ClientCount := 0
@@ -111,11 +114,9 @@ func StartMultiServer(config *ServerConfig) (*Server, error) {
 						continue
 					}
 					go ns.run(ClientCount)
-					s.ServerManager = &ServerManager{
-						Servers:      append(s.ServerManager.Servers, ns),
-						ServerConfig: config,
-						Logger:       s.logger,
-					}
+					s.ServerManager.mutex.Lock()
+					s.ServerManager.Servers = append(s.ServerManager.Servers, ns)
+					s.ServerManager.mutex.Unlock()
 				} else {
 					cms.logger.Errorf("encountered an error attempting to create a client server %d %s", ClientCount+1, err)
 				}
@@ -126,10 +127,18 @@ func StartMultiServer(config *ServerConfig) (*Server, error) {
 	return s.run(1)
 }
 
+func (sm *ServerManager) getServers() []*Server {
+	sm.mutex.Lock()
+	servers := sm.Servers
+	sm.mutex.Unlock()
+	return servers
+}
+
 func (sm *ServerManager) MapExec(callback func(*Server), from string) {
-	serverLen := len(sm.Servers)
+	servers := sm.getServers()
+	serverLen := len(servers)
 	serverOp := make(chan bool, serverLen)
-	for i, server := range sm.Servers {
+	for i, server := range servers {
 		//skip the first serverManager instance
 		if i == 0 {
 			continue
@@ -194,7 +203,7 @@ func (s *Server) run(clientId int) (*Server, error) {
 	}
 
 	go s.acceptLoop()
-	s.status = Listening
+	s.setStatus(Listening)
 
 	return s, nil
 }
@@ -210,7 +219,10 @@ func (s *Server) acceptLoop() {
 			return
 		}
 
-		if s.status == Listening || s.status == Disconnected {
+		status := s.getStatus()
+		isListeningOrDisconnected := status == Listening || status == Disconnected
+
+		if isListeningOrDisconnected {
 
 			s.conn = conn
 
@@ -218,7 +230,7 @@ func (s *Server) acceptLoop() {
 			if err2 != nil {
 				s.logger.Errorf("Server.acceptLoop handshake err: %s", err2)
 				s.dispatchError(err2)
-				s.status = Error
+				s.setStatus(Error)
 				s.listener.Close()
 				conn.Close()
 
@@ -238,7 +250,7 @@ func (s *Server) ByteReader(a *Actor, buff []byte) bool {
 	_, err := io.ReadFull(a.conn, buff)
 	if err != nil {
 
-		if a.status == Closing {
+		if a.getStatus() == Closing {
 			a.dispatchStatusBlocking(Closed)
 			a.dispatchErrorStrBlocking("server has closed the connection")
 			return false

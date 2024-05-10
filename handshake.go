@@ -42,13 +42,13 @@ func (sc *Server) one() error {
 		buff[1] = byte(0)
 	}
 
-	_, err := sc.conn.Write(buff)
+	_, err := sc.getConn().Write(buff)
 	if err != nil {
 		return errors.New("unable to send handshake ")
 	}
 
 	recv := make([]byte, 1)
-	_, err = sc.conn.Read(recv)
+	_, err = sc.getConn().Read(recv)
 	if err != nil {
 		return errors.New("failed to received handshake reply")
 	}
@@ -85,14 +85,14 @@ func (sc *Server) msgLength() error {
 	binary.BigEndian.PutUint32(toSend, uint32(len(buff)))
 	toSend = append(toSend, buff...)
 
-	_, err = sc.conn.Write(toSend)
+	_, err = sc.getConn().Write(toSend)
 	if err != nil {
 		return errors.New("unable to send max message length ")
 	}
 
 	reply := make([]byte, 1)
 
-	_, err = sc.conn.Read(reply)
+	_, err = sc.getConn().Read(reply)
 	if err != nil {
 		return errors.New("did not received message length reply")
 	}
@@ -126,7 +126,7 @@ func (cc *Client) handshake() error {
 func (cc *Client) one() error {
 
 	recv := make([]byte, 2)
-	_, err := cc.conn.Read(recv)
+	_, err := cc.getConn().Read(recv)
 	if err != nil {
 		return errors.New("failed to received handshake message")
 	}
@@ -148,7 +148,7 @@ func (cc *Client) msgLength() error {
 
 	buff := make([]byte, 4)
 
-	_, err := cc.conn.Read(buff)
+	_, err := cc.getConn().Read(buff)
 	if err != nil {
 		return errors.New("failed to received max message length 1")
 	}
@@ -161,7 +161,7 @@ func (cc *Client) msgLength() error {
 
 	buff = make([]byte, int(msgLen))
 
-	_, err = cc.conn.Read(buff)
+	_, err = cc.getConn().Read(buff)
 	if err != nil {
 		return errors.New("failed to received max message length 2")
 	}
@@ -188,6 +188,6 @@ func (cc *Client) handshakeSendReply(result byte) error {
 	buff := make([]byte, 1)
 	buff[0] = result
 
-	_, err := cc.conn.Write(buff)
+	_, err := cc.getConn().Write(buff)
 	return err
 }

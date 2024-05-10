@@ -188,7 +188,7 @@ func (c *Client) dial() error {
 				c.logger.Debugf("Seconds since: %f, timeout seconds: %f", time.Since(startTime).Seconds(), c.timeout.Seconds())
 			}
 			if time.Since(startTime).Seconds() > c.timeout.Seconds() {
-				c.status = Closed
+				c.setStatus(Closed)
 				return errors.New("timed out trying to connect")
 			}
 		}
@@ -205,8 +205,7 @@ func (c *Client) dial() error {
 			}
 
 		} else {
-
-			c.conn = conn
+			c.setConn(conn)
 			err = c.handshake()
 			if err != nil {
 				c.logger.Errorf("Client.dial handshake err: %s", err)
@@ -222,19 +221,19 @@ func (c *Client) dial() error {
 
 func (c *Client) ByteReader(a *Actor, buff []byte) bool {
 
-	_, err := io.ReadFull(a.conn, buff)
+	_, err := io.ReadFull(a.getConn(), buff)
 	if err != nil {
 		a.logger.Debugf("Client.readData err: %s", err)
-		if c.status == Closing {
+		if c.getStatus() == Closing {
 			a.dispatchStatusBlocking(Closed)
 			a.dispatchErrorStrBlocking("client has closed the connection")
 			return false
 		}
 
 		if err == io.EOF { // the connection has been closed by the client.
-			a.conn.Close()
+			a.getConn().Close()
 
-			if a.status != Closing {
+			if a.getStatus() != Closing {
 				go reconnect(c)
 			}
 			return false
