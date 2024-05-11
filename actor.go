@@ -235,14 +235,11 @@ func (a *Actor) write() {
 			a.logger.Errorf("error flushing data: %s", err)
 			continue
 		}
-
-		time.Sleep(2 * time.Millisecond)
-
 	}
 }
 
 func (a *Actor) dispatchStatusBlocking(status Status) {
-	a.logger.Debugf("Actor.dispacthStatus(%s): %s", a.getRole(), a.Status())
+	a.logger.Debugf("Actor.dispacthStatus(%s): %s", a, a.Status())
 	a.setStatus(status)
 	a.received <- &Message{Status: status.String(), MsgType: -1}
 }
@@ -252,7 +249,7 @@ func (a *Actor) dispatchErrorStrBlocking(err string) {
 }
 
 func (a *Actor) dispatchErrorBlocking(err error) {
-	a.logger.Debugf("Actor.dispacthError(%s): %s", a.getRole(), err)
+	a.logger.Debugf("Actor.dispacthError(%s): %s", a, err)
 	a.received <- &Message{Err: err, MsgType: -1}
 }
 
@@ -266,16 +263,6 @@ func (a *Actor) dispatchErrorStr(err string) {
 
 func (a *Actor) dispatchError(err error) {
 	go a.dispatchErrorBlocking(err)
-}
-
-func (a *Actor) getRole() string {
-	if a.config.IsServer {
-		return "Server"
-	} else if a.clientRef != nil && a.clientRef.ClientId != 0 {
-		return fmt.Sprintf("Client(%d)", a.clientRef.ClientId)
-	} else {
-		return "Client"
-	}
 }
 
 // getStatus - get the current status of the connection
@@ -323,5 +310,15 @@ func (a *Actor) Close() {
 
 	if a.conn != nil {
 		a.getConn().Close()
+	}
+}
+
+func (a *Actor) String() string {
+	if a.config.IsServer {
+		return "Server"
+	} else if a.clientRef != nil && a.clientRef.ClientId != 0 {
+		return fmt.Sprintf("Client(%d)", a.clientRef.ClientId)
+	} else {
+		return "Client"
 	}
 }

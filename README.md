@@ -158,13 +158,13 @@ UnmaskPermissions: true
 The package has been tested on Mac and Linux and has extensive test coverage. The following commands will run all of the tests and examples with race condition detection enabled.
 
 ```bash
-make test && make run
+make test run
 ```
 
 You can change the speed of the tests by providing a value for the `IPC_CLIENT_CONNECT_WAIT` environment variable. A value `> 5` will specify the amount of milliseconds to wait in between critical intervals whereas a value `<= 5` will resolve to the amount of seconds to wait in between the same. The default value is 10 milliseconds. You can also provide the `IPC_DEBUG=true` environment variable to set the `logrus.Loglevel` to debug mode. The following command will make the tests run in debug mode while waiting 500ms in between critical intervals:
 
 ```bash
-IPC_CLIENT_CONNECT_WAIT=500 IPC_DEBUG=true make test
+IPC_CLIENT_CONNECT_WAIT=500 IPC_DEBUG=true make test run
 ```
 
 ## Licence
