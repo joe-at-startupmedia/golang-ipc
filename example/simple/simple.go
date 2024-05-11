@@ -20,7 +20,7 @@ func main() {
 		main()
 	}
 
-	// change the sleep time by using IPC_CLIENT_CONNECT_WAIT env variable (seconds)
+	// change the sleep time by using IPC_WAIT env variable (seconds)
 	ipc.Sleep()
 
 	clientConfig := &ipc.ClientConfig{Name: "example-simple", Encryption: ipc.ENCRYPT_BY_DEFAULT}

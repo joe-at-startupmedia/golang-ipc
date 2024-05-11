@@ -13,12 +13,12 @@ Golang Inter-process communication library for Mac/Linux forked from [james-barr
 
 ### Overview
  
- A simple to use package that uses unix sockets on Mac/Linux to create a communication channel between two go processes.
+A simple-to-use package that uses unix sockets on Mac/Linux to create a communication channel between two go processes.
 
 
 ## Usage
 
-Create a server with the default configuation and start listening for the client:
+Create a server with the default configuration and start listening for the client:
 
 ```go
 s, err := ipc.StartServer(&ServerConfig{Name:"<name of socket or pipe>"})
@@ -86,7 +86,7 @@ for {
 }
 ```
 
-All received messages are formated into the type Message
+All received messages are formatted into the type Message
 
 ```go
 type Message struct {
@@ -110,7 +110,7 @@ if err == nil {
 }
 ```
 
- ## Advanced Configuaration
+ ## Advanced Configuration
 
 Server options:
 
@@ -137,9 +137,9 @@ config := &ipc.ClientConfig  {
 
  ### Encryption
 
- By default the connection established will be encypted, ECDH384 is used for the key exchange and AES 256 GCM is used for the cipher.
+ By default, the connection established will be encrypted, ECDH384 is used for the key exchange and AES 256 GCM is used for the cipher.
 
- Encryption can be swithed off by passing in a custom configuation to the server & client start function:
+ Encryption can be switched off by passing in a custom configuration to the server & client start function:
 
 ```go
 Encryption: false
@@ -161,12 +161,8 @@ The package has been tested on Mac and Linux and has extensive test coverage. Th
 make test run
 ```
 
-You can change the speed of the tests by providing a value for the `IPC_CLIENT_CONNECT_WAIT` environment variable. A value `> 5` will specify the amount of milliseconds to wait in between critical intervals whereas a value `<= 5` will resolve to the amount of seconds to wait in between the same. The default value is 10 milliseconds. You can also provide the `IPC_DEBUG=true` environment variable to set the `logrus.Loglevel` to debug mode. The following command will make the tests run in debug mode while waiting 500ms in between critical intervals:
+You can change the speed of the tests by providing a value for the `IPC_WAIT` environment variable. A value `> 5` will specify the amount of milliseconds to wait in between critical intervals whereas a value `<= 5` will resolve to the amount of seconds to wait in between the same. The default value is 10 milliseconds. You can also provide the `IPC_DEBUG=true` environment variable to set the `logrus.Loglevel` to debug mode. The following command will make the tests run in debug mode while waiting 500ms in between critical intervals:
 
 ```bash
-IPC_CLIENT_CONNECT_WAIT=500 IPC_DEBUG=true make test run
+IPC_WAIT=500 IPC_DEBUG=true make test run
 ```
-
-## Licence
-
-MIT

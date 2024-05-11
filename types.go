@@ -36,13 +36,20 @@ type Client struct {
 	maxMsgSize int //set in the handshake process dictated by the ServerConfig.MaxMsgSize value
 }
 
+type ServerManager struct {
+	Servers      []*Server
+	ServerConfig *ServerConfig
+	Logger       *logrus.Logger
+	mutex        *sync.Mutex
+}
+
 type ActorConfig struct {
 	IsServer     bool
 	ServerConfig *ServerConfig
 	ClientConfig *ClientConfig
 }
 
-// ServerConfig - used to pass configuation overrides to ServerStart()
+// ServerConfig - used to pass configuration overrides to ServerStart()
 type ServerConfig struct {
 	Name              string
 	MaxMsgSize        int
@@ -52,7 +59,7 @@ type ServerConfig struct {
 	Encryption        bool
 }
 
-// ClientConfig - used to pass configuation overrides to ClientStart()
+// ClientConfig - used to pass configuration overrides to ClientStart()
 type ClientConfig struct {
 	Name        string
 	Timeout     time.Duration
@@ -60,13 +67,6 @@ type ClientConfig struct {
 	LogLevel    string
 	MultiClient bool
 	Encryption  bool
-}
-
-type ServerManager struct {
-	Servers      []*Server
-	ServerConfig *ServerConfig
-	Logger       *logrus.Logger
-	mutex        *sync.Mutex
 }
 
 // Message - contains the received message
@@ -81,7 +81,6 @@ type Message struct {
 type Status int
 
 const (
-
 	// NotConnected - 0
 	NotConnected Status = iota
 	// Listening - 1

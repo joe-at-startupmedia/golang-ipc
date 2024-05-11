@@ -57,17 +57,17 @@ func getLogrusLevel(logLevel string) logrus.Level {
 }
 
 func GetDefaultClientConnectWait() int {
-	envVar := os.Getenv("IPC_CLIENT_CONNECT_WAIT")
+	envVar := os.Getenv("IPC_WAIT")
 	if len(envVar) > 0 {
 		valInt, err := strconv.Atoi(envVar)
 		if err == nil {
 			return valInt
 		}
 	}
-	return DEFAULT_CLIENT_CONNECT_WAIT
+	return DEFAULT_WAIT
 }
 
-// Sleep change the sleep time by using IPC_CLIENT_CONNECT_WAIT env variable (seconds)
+// Sleep change the sleep time by using IPC_WAIT env variable (seconds)
 func Sleep() {
 	wait := GetDefaultClientConnectWait()
 	if wait > 5 {

@@ -80,7 +80,6 @@ func generateKeys() (*ecdsa.PrivateKey, *ecdsa.PublicKey, error) {
 	}
 
 	return priva, puba, err
-
 }
 
 func sendPublic(conn net.Conn, pub *ecdsa.PublicKey) error {
@@ -136,7 +135,6 @@ func bytesToPublicKey(recvdPub []byte) *ecdsa.PublicKey {
 
 	x, y := elliptic.Unmarshal(elliptic.P384(), recvdPub)
 	return &ecdsa.PublicKey{Curve: elliptic.P384(), X: x, Y: y}
-
 }
 
 func createCipher(shared [32]byte) (*cipher.AEAD, error) {
@@ -161,7 +159,6 @@ func encrypt(g cipher.AEAD, data []byte) ([]byte, error) {
 	_, err := io.ReadFull(rand.Reader, nonce)
 
 	return g.Seal(nonce, nonce, data, nil), err
-
 }
 
 func decrypt(g cipher.AEAD, recdData []byte) ([]byte, error) {
@@ -178,5 +175,4 @@ func decrypt(g cipher.AEAD, recdData []byte) ([]byte, error) {
 	}
 
 	return plain, nil
-
 }

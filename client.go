@@ -223,7 +223,7 @@ func (c *Client) ByteReader(a *Actor, buff []byte) bool {
 
 	_, err := io.ReadFull(a.getConn(), buff)
 	if err != nil {
-		a.logger.Debugf("Client.readData err: %s", err)
+		a.logger.Debugf("%s.readData err: %s", c, err)
 		if c.getStatus() == Closing {
 			a.dispatchStatusBlocking(Closed)
 			a.dispatchErrorStrBlocking("client has closed the connection")
