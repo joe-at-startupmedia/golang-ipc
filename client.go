@@ -208,7 +208,7 @@ func (c *Client) dial() error {
 			c.setConn(conn)
 			err = c.handshake()
 			if err != nil {
-				c.logger.Errorf("Client.dial handshake err: %s", err)
+				c.logger.Errorf("%s.dial handshake err: %s", c, err)
 				return err
 			}
 
@@ -269,5 +269,5 @@ func reconnect(c *Client) {
 
 // getStatus - get the current status of the connection
 func (c *Client) String() string {
-	return fmt.Sprintf("Client(%d)", c.ClientId)
+	return fmt.Sprintf("Client(%d)(%s)", c.ClientId, c.getStatus())
 }

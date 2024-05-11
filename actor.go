@@ -56,7 +56,7 @@ func (a *Actor) Read() (*Message, error) {
 	}
 
 	if m.Err != nil {
-		a.logger.Errorf("Actor.Read err: %s", m.Err)
+		a.logger.Errorf("%s.Read err: %s", a, m.Err)
 		if !a.config.IsServer {
 			close(a.received)
 			close(a.toWrite)
@@ -89,7 +89,7 @@ func (a *Actor) ReadTimed(duration time.Duration, onTimeoutMessage *Message) (*M
 					//requeue the message when the Read task does finally finish
 					<-readFinished
 					msg := <-readMsgChan
-					a.logger.Debugf("Actor.ReadTimed recycling timed-out message %s", msg.Data)
+					a.logger.Debugf("%s.ReadTimed recycling timed-out message %s", a, msg.Data)
 					a.received <- msg
 					return
 				}
@@ -119,7 +119,7 @@ func (a *Actor) Write(msgType int, message []byte) error {
 
 	if msgType == 0 {
 		err := errors.New("message type 0 is reserved")
-		a.logger.Errorf("Actor.Write err: %s", err)
+		a.logger.Errorf("%s.Write err: %s", a, err)
 		return err
 	}
 
@@ -136,7 +136,7 @@ func (a *Actor) Write(msgType int, message []byte) error {
 		return a.Write(msgType, message)
 	} else if status != Connected {
 		err := errors.New(fmt.Sprintf("cannot write under current status: %s", a.Status()))
-		a.logger.Errorf("Actor.Write err: %s", err)
+		a.logger.Errorf("%s.Write err: %s", a, err)
 		return err
 	}
 
@@ -144,12 +144,12 @@ func (a *Actor) Write(msgType int, message []byte) error {
 	if a.config.IsServer {
 		if mlen > a.config.ServerConfig.MaxMsgSize {
 			err := errors.New("message exceeds maximum message length")
-			a.logger.Errorf("Server.Write err: %s", err)
+			a.logger.Errorf("%s.Write err: %s", a, err)
 			return err
 		}
 	} else if mlen > a.clientRef.maxMsgSize {
 		err := errors.New("message exceeds maximum message length")
-		a.logger.Errorf("Client.Write err: %s", err)
+		a.logger.Errorf("%s.Write err: %s", a, err)
 		return err
 	}
 
@@ -190,7 +190,7 @@ func (a *Actor) read(readBytesCb func(*Actor, []byte) bool) {
 
 		if msgType == 0 {
 			//  type 0 = control message
-			a.logger.Debugf("Server.read - control message encountered")
+			a.logger.Debugf("%s.read - control message encountered", a)
 		} else {
 			a.received <- &Message{Data: msgData, MsgType: msgType}
 		}
@@ -230,10 +230,12 @@ func (a *Actor) write() {
 			a.logger.Errorf("error writing message: %s", err)
 		}
 
-		err = writer.Flush()
-		if err != nil {
-			a.logger.Errorf("error flushing data: %s", err)
-			continue
+		if a.getStatus() <= 4 {
+			err = writer.Flush()
+			if err != nil {
+				a.logger.Errorf("%s error flushing data: %s", a, err)
+				continue
+			}
 		}
 	}
 }
@@ -315,10 +317,8 @@ func (a *Actor) Close() {
 
 func (a *Actor) String() string {
 	if a.config.IsServer {
-		return "Server"
-	} else if a.clientRef != nil && a.clientRef.ClientId != 0 {
-		return a.clientRef.String()
+		return fmt.Sprintf("Server(%s)", a.getStatus())
 	} else {
-		return "Client"
+		return a.clientRef.String()
 	}
 }
