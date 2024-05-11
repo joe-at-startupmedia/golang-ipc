@@ -317,7 +317,7 @@ func (a *Actor) String() string {
 	if a.config.IsServer {
 		return "Server"
 	} else if a.clientRef != nil && a.clientRef.ClientId != 0 {
-		return fmt.Sprintf("Client(%d)", a.clientRef.ClientId)
+		return a.clientRef.String()
 	} else {
 		return "Client"
 	}
