@@ -222,12 +222,12 @@ func (a *Actor) write() {
 		//first send the message size
 		_, err := writer.Write(intToBytes(len(toSend)))
 		if err != nil {
-			a.logger.Errorf("error writing message size: %s", err)
+			a.logger.Errorf("%s error writing message size: %s", a, err)
 		}
 		//last send the message
 		_, err = writer.Write(toSend)
 		if err != nil {
-			a.logger.Errorf("error writing message: %s", err)
+			a.logger.Errorf("%s error writing message: %s", a, err)
 		}
 
 		if a.getStatus() <= 4 {
