@@ -53,8 +53,6 @@ func main() {
 
 	ipc.Sleep()
 
-	c1.Close()
-	c2.Close()
 	srv.Close()
 
 	ipc.Sleep()

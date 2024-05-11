@@ -130,8 +130,8 @@ Client options:
 config := &ipc.ClientConfig  {
 	Name: (string),             // the name of the queue needs to match the name of the ServerConfig (required)
 	Encryption: (bool),         // allows encryption to be switched off (bool - default is true)
-	Timeout: (float64),         // number of seconds to wait before timing out trying to connect/reconnect (default is 0 no timeout)
-	RetryTimer: (time.Duration),// number of seconds to wait before connection retry (default is 0)
+	Timeout: (time.Duration),   // duration to wait before timing out trying to connect/reconnect (default is 0 no timeout)
+	RetryTimer: (time.Duration),// duration to wait before connection retry (default is 0 upon which connection timeouts will not be retried)
 }
 ```
 

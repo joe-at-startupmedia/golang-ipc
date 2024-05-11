@@ -120,50 +120,14 @@ func (c *Client) getSocketName() string {
 func start(c *Client) (*Client, error) {
 	c.dispatchStatus(Connecting)
 
-	if c.timeout != 0 {
+	err := c.dial()
 
-		dialFinished := make(chan bool, 1)
-		dialErrorChan := make(chan error, 1)
-
-		go func() {
-			startTime := time.Now()
-			timer := time.NewTicker(time.Millisecond * 1000)
-			for {
-				<-timer.C
-				select {
-				case <-dialFinished:
-					return
-				default:
-					if time.Since(startTime).Seconds() > 2 {
-						c.logger.Debugf("Start loop since: %f", time.Since(startTime).Seconds())
-					}
-					if time.Since(startTime).Seconds() > c.timeout.Seconds() {
-						dialErrorChan <- errors.New("timed out trying to connect")
-						return
-					}
-				}
-			}
-		}()
-
-		go func() {
-			err := c.dial()
-			dialFinished <- true
-			dialErrorChan <- err
-			if err != nil {
-				c.dispatchError(err)
-			}
-		}()
-
-		err := <-dialErrorChan
-
-		//TODO if Retry is allowed
-		if err != nil {
+	if err != nil {
+		if c.retryTimer > 0 {
+			time.Sleep(c.retryTimer)
+			c.logger.Warn()
 			return start(c)
-		}
-	} else {
-		err := c.dial()
-
-		if err != nil {
+		} else {
 			c.dispatchError(err)
 			return c, err
 		}
@@ -184,10 +148,7 @@ func (c *Client) dial() error {
 	for {
 
 		if c.timeout != 0 {
-			if time.Since(startTime).Seconds() > 2 {
-				c.logger.Debugf("Seconds since: %f, timeout seconds: %f", time.Since(startTime).Seconds(), c.timeout.Seconds())
-			}
-			if time.Since(startTime).Seconds() > c.timeout.Seconds() {
+			if time.Since(startTime) > c.timeout {
 				c.setStatus(Closed)
 				return errors.New("timed out trying to connect")
 			}

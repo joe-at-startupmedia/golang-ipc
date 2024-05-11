@@ -74,26 +74,21 @@ func (a *Actor) ReadTimed(duration time.Duration, onTimeoutMessage *Message) (*M
 	readErrChan := make(chan error, 1)
 
 	go func() {
-		startTime := time.Now()
-		timer := time.NewTicker(time.Second * 1)
-		for {
-			<-timer.C
-			select {
-			case <-readFinished:
-				return
-			default:
-				if time.Since(startTime).Seconds() > (duration).Seconds() {
-					readMsgChan <- onTimeoutMessage
-					readErrChan <- nil
+		select {
+		case <-time.After(duration):
+			readMsgChan <- onTimeoutMessage
+			readErrChan <- nil
 
-					//requeue the message when the Read task does finally finish
-					<-readFinished
-					msg := <-readMsgChan
-					a.logger.Debugf("%s.ReadTimed recycling timed-out message %s", a, msg.Data)
-					a.received <- msg
-					return
-				}
+			//requeue the message when the Read task does finally finish
+			<-readFinished
+			msg := <-readMsgChan
+			if msg != nil && a.getStatus() <= Connected {
+				a.logger.Debugf("%s.ReadTimed recycling timed-out message %s", a, msg.Data)
+				a.received <- msg
 			}
+			return
+		case <-readFinished:
+			return
 		}
 	}()
 
@@ -307,6 +302,9 @@ func (a *Actor) Status() string {
 
 // Close - closes the connection
 func (a *Actor) Close() {
+
+	//omits errors resulting from connections being closed
+	a.logger.SetLevel(logrus.FatalLevel)
 
 	a.setStatus(Closing)
 

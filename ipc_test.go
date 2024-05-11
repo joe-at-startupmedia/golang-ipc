@@ -5,13 +5,14 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
 
 var RetriesEnabledClientConfig = &ClientConfig{
-	Timeout:    time.Duration(time.Second * 10),
-	RetryTimer: time.Duration(time.Second * 1),
+	Timeout:    time.Second * 3,
+	RetryTimer: time.Second * 1,
 	Encryption: ENCRYPT_BY_DEFAULT,
 }
 
@@ -119,47 +120,76 @@ func TestStartUp_Configs(t *testing.T) {
 	})
 }
 
-/*
-func TestStartUp_Timeout(t *testing.T) {
+func TestTimeoutNoServer(t *testing.T) {
 
-	scon := &ServerConfig{
-		//Timeout: 1,
+	ccon := clientConfig("test_timeout")
+	ccon.Timeout = 2 * time.Second
+
+	_, err := StartClient(ccon)
+	if !strings.Contains(err.Error(), "timed out trying to connect") {
+		t.Error(err)
 	}
+}
 
-	sc, _ := StartServer("test_dummy", scon)
+func TestTimeoutNoServerRetry(t *testing.T) {
 
-	for {
-		_, err1 := sc.Read()
+	ccon := clientConfig("test_timeout_retryloop")
+	ccon.Timeout = 500 * time.Millisecond //extremely impractical low value for testing purposes only
+	ccon.RetryTimer = 250 * time.Millisecond
 
-		if err1 != nil {
-			if err1.Error() != "timed out waiting for client to connect" {
-				t.Error("should of got server timeout")
-			}
-			break
-		}
+	dialFinished := make(chan bool, 1)
 
-	}
+	go func() {
+		time.Sleep(time.Second * 2)
+		dialFinished <- true
+	}()
 
-	ccon := &ClientConfig{
-		Timeout:    2,
-		RetryTimer: 1,
-	}
-
-	cc, _ := StartClient("test2", ccon)
-
-	for {
-		_, err := cc.Read()
+	go func() {
+		//this should retry every second and never return
+		cc, err := StartClient(ccon)
 		if err != nil {
-			if err.Error() != "timed out trying to connect" {
-				t.Error("should of got timeout as client was trying to connect")
+			t.Error(err)
+		} else if cc != nil {
+			t.Error("client returned with success but should have got stuck in a retry loop")
+		}
+	}()
+
+	<-dialFinished
+}
+
+func TestTimeoutServerDisconnected(t *testing.T) {
+
+	scon := serverConfig("test_timeout_server_disconnect")
+
+	sc, err := StartServer(scon)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ccon := clientConfig("test_timeout_server_disconnect")
+	ccon.Timeout = 2 * time.Second
+
+	cc, err2 := StartClient(ccon)
+	if err2 != nil {
+		t.Error(err2)
+	}
+
+	go func() {
+		time.Sleep(time.Second * 1)
+		sc.Close()
+	}()
+
+	for {
+		_, err := cc.ReadTimed(time.Second*1, TimeoutMessage)
+		if err != nil {
+			//this error will only be reached is Timeout is specified, otherwise
+			//the reconnect dial loop will loop perpetually
+			if err.Error() == "the received channel has been closed" {
+				break
 			}
-
-			break
-
 		}
 	}
 }
-*/
 
 func TestWrite(t *testing.T) {
 
@@ -1092,7 +1122,6 @@ func TestServerReconnect(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-
 	Sleep()
 
 	ccon := clientConfig("test1277")
@@ -1108,74 +1137,61 @@ func TestServerReconnect(t *testing.T) {
 	go func() {
 
 		for {
-			//cc.logger.Debug("x")
 			m, _ := cc.Read()
-			if m.Status == "Connected" {
-				//cc.logger.Debug("a")
+			if m != nil && m.Status == "Connected" {
 				<-clientConnected
-				//cc.logger.Debug("b")
 				connected <- true
-				break
 			}
-
 		}
 	}()
 
 	go func() {
 
 		reconnectCheck := 0
-
+		connectCnt := 0
 		for {
-			//We used ReadTimed in order to scan client buffer on the next loop
-			sc.ServerManager.ReadTimed(2*time.Second, TimeoutMessage, func(_ *Server, m *Message, err error) {
-				//sc.ServerManager.Read(func(_ *Server, m *Message, err error) {
-				//sc.logger.Debugf("z %s %d", m.Status, reconnectCheck)
+			m, err := sc.Read()
 
-				if err != nil {
-					//sc.logger.Debugf("TestServerReconnect sever read loop err: %s", err)
-					return
-				}
+			if err != nil {
+				//sc.logger.Debugf("TestServerReconnect sever read loop err: %s", err)
+				//t.Error(err)
+				return
+			}
 
-				if m.Status == "Connected" {
-					//sc.logger.Debug("c")
-					clientConnected <- true
-				}
-
-				if m.Status == "Disconnected" {
-					//sc.logger.Debug("d")
-					reconnectCheck = 1
-				}
-
-				if m.Status == "Connected" && reconnectCheck == 1 {
-					//sc.logger.Debug("e")
+			if m.Status == "Connected" {
+				if reconnectCheck == 1 && connectCnt > 0 {
 					clientConfirm <- true
+				} else {
+					clientConnected <- true
+					connectCnt++
 				}
-			})
+			}
+
+			//dispatched on EOF
+			if m.Status == "Disconnected" {
+				reconnectCheck = 1
+			}
+
 		}
 	}()
 
-	//cc.logger.Debug("f")
 	<-connected
 	cc.Close()
 
-	//cc.logger.Debug("h")
+	//THIS IS IMPORTANT
+	// this allows time for the server to realize the client disconnected
+	// before adding the new client. If this is absent, tests will continue
+	// working most of the time except when the rare race conditions are met
+	time.Sleep(time.Second * 1)
+
 	ccon = RetriesEnabledClientConfig
 	ccon.Name = "test1277"
-	c2, err := StartClient(ccon)
+	ccon.Timeout = 2 * time.Second
+	_, err = StartClient(ccon)
 	if err != nil {
 		t.Error(err)
 	}
 
-	for {
-		//cc.logger.Debug("i")
-		m, _ := c2.Read()
-		if m.Status == "Connected" {
-			//cc.logger.Debug("j")
-			break
-		}
-	}
-
-	//cc.logger.Debug("k")
 	<-clientConfirm
 
 	sc.Close()
@@ -1207,7 +1223,6 @@ func TestServerReconnect2(t *testing.T) {
 				return
 			default:
 				m, err := cc.Read()
-				//cc.logger.Warnf("Z %s", m.Status)
 				if m.Status == "Connected" {
 
 					<-hasConnected
@@ -1223,13 +1238,11 @@ func TestServerReconnect2(t *testing.T) {
 
 					for {
 						n, _ := c2.Read()
-						//cc.logger.Warnf("Y  %s", m.Status)
 						if n.Status == "Connected" {
 							c2.Close()
 							break
 						}
 					}
-					//cc.logger.Warnf("Y 2")
 					return
 				}
 			}
@@ -1242,25 +1255,20 @@ func TestServerReconnect2(t *testing.T) {
 	for {
 		select {
 		case <-hasReconnected:
-			//sc.logger.Warnf("X 4")
 			return
 		default:
 			sc.ServerManager.ReadTimed(2*time.Second, TimeoutMessage, func(_ *Server, m *Message, err error) {
-				//sc.logger.Warnf("X %s %t %t", m.Status, connect, disconnect)
 				if m.Status == "Connected" && connect == false {
-					//sc.logger.Warnf("X 1")
 					hasConnected <- true
 					connect = true
 				}
 
 				if m.Status == "Disconnected" {
-					//sc.logger.Warnf("X 2")
 					hasDisconnected <- true
 					disconnect = true
 				}
 
 				if m.Status == "Connected" && connect == true && disconnect == true {
-					//sc.logger.Warnf("X 3")
 					hasReconnected <- true
 				}
 			})
@@ -1293,12 +1301,9 @@ func TestServerReconnectMulti(t *testing.T) {
 	go func() {
 
 		for {
-			//cc.logger.Debug("x")
 			m, _ := cc.Read()
 			if m.Status == "Connected" {
-				//cc.logger.Debug("a")
 				<-clientConnected
-				//cc.logger.Debug("b")
 				connected <- true
 				break
 			}
@@ -1313,37 +1318,29 @@ func TestServerReconnectMulti(t *testing.T) {
 		for {
 			//We used ReadTimed in order to scan client buffer on the next loop
 			sc.ServerManager.ReadTimed(2*time.Second, TimeoutMessage, func(_ *Server, m *Message, err error) {
-				//sc.ServerManager.Read(func(_ *Server, m *Message, err error) {
-				//sc.logger.Debugf("z %s %d", m.Status, reconnectCheck)
 
 				if err != nil {
-					//sc.logger.Debugf("TestServerReconnect sever read loop err: %s", err)
 					return
 				}
 
 				if m.Status == "Connected" {
-					//sc.logger.Debug("c")
 					clientConnected <- true
 				}
 
 				if m.Status == "Disconnected" {
-					//sc.logger.Debug("d")
 					reconnectCheck = 1
 				}
 
 				if m.Status == "Connected" && reconnectCheck == 1 {
-					//sc.logger.Debug("e")
 					clientConfirm <- true
 				}
 			})
 		}
 	}()
 
-	//cc.logger.Debug("f")
 	<-connected
 	cc.Close()
 
-	//cc.logger.Debug("h")
 	ccon = clientConfig("test1277_multi")
 	ccon.MultiClient = true
 	c2, err := StartClient(ccon)
@@ -1352,15 +1349,12 @@ func TestServerReconnectMulti(t *testing.T) {
 	}
 
 	for {
-		//cc.logger.Debug("i")
 		m, _ := c2.Read()
 		if m.Status == "Connected" {
-			//cc.logger.Debug("j")
 			break
 		}
 	}
 
-	//cc.logger.Debug("k")
 	<-clientConfirm
 
 	sc.Close()
@@ -1394,7 +1388,6 @@ func TestServerReconnect2Mutli(t *testing.T) {
 				return
 			default:
 				m, err := cc.Read()
-				//cc.logger.Warnf("Z %s", m.Status)
 				if m.Status == "Connected" {
 
 					<-hasConnected
@@ -1412,13 +1405,11 @@ func TestServerReconnect2Mutli(t *testing.T) {
 
 					for {
 						n, _ := c2.Read()
-						//cc.logger.Warnf("Y  %s", m.Status)
 						if n.Status == "Connected" {
 							c2.Close()
 							break
 						}
 					}
-					//cc.logger.Warnf("Y 2")
 					return
 				}
 			}
@@ -1431,25 +1422,20 @@ func TestServerReconnect2Mutli(t *testing.T) {
 	for {
 		select {
 		case <-hasReconnected:
-			//sc.logger.Warnf("X 4")
 			return
 		default:
 			sc.ServerManager.ReadTimed(2*time.Second, TimeoutMessage, func(_ *Server, m *Message, err error) {
-				//sc.logger.Warnf("X %s %t %t", m.Status, connect, disconnect)
 				if m.Status == "Connected" && connect == false {
-					//sc.logger.Warnf("X 1")
 					hasConnected <- true
 					connect = true
 				}
 
 				if m.Status == "Disconnected" {
-					//sc.logger.Warnf("X 2")
 					hasDisconnected <- true
 					disconnect = true
 				}
 
 				if m.Status == "Connected" && connect == true && disconnect == true {
-					//sc.logger.Warnf("X 3")
 					hasReconnected <- true
 				}
 			})

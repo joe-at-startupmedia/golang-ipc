@@ -210,7 +210,6 @@ func (s *Server) run(clientId int) (*Server, error) {
 
 func (s *Server) acceptLoop() {
 
-	i := 0
 	for {
 
 		conn, err := s.listener.Accept()
@@ -220,9 +219,8 @@ func (s *Server) acceptLoop() {
 		}
 
 		status := s.getStatus()
-		isListeningOrDisconnected := status == Listening || status == Disconnected
 
-		if isListeningOrDisconnected {
+		if status == Listening || status == Disconnected {
 
 			s.conn = conn
 
@@ -241,7 +239,6 @@ func (s *Server) acceptLoop() {
 				s.dispatchStatus(Connected)
 			}
 		}
-		i++
 	}
 }
 
