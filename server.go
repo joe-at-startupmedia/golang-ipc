@@ -7,7 +7,6 @@ import (
 	"os"
 	"sync"
 	"syscall"
-	"time"
 )
 
 // StartServer - starts the ipc server.
@@ -127,49 +126,6 @@ func StartMultiServer(config *ServerConfig) (*Server, error) {
 	return s.run(1)
 }
 
-func (sm *ServerManager) getServers() []*Server {
-	sm.mutex.Lock()
-	servers := sm.Servers
-	sm.mutex.Unlock()
-	return servers
-}
-
-func (sm *ServerManager) MapExec(callback func(*Server), from string) {
-	servers := sm.getServers()
-	serverLen := len(servers)
-	serverOp := make(chan bool, serverLen)
-	for i, server := range servers {
-		//skip the first serverManager instance
-		if i == 0 {
-			continue
-		}
-		go func(s *Server) {
-			callback(s)
-			serverOp <- true
-		}(server)
-	}
-	n := 0
-	for n < serverLen-1 {
-		<-serverOp
-		n++
-		sm.Logger.Debugf("sm.%sfinished for server(%d)", from, n)
-	}
-}
-
-func (sm *ServerManager) Read(callback func(*Server, *Message, error)) {
-	sm.MapExec(func(s *Server) {
-		message, err := s.Read()
-		callback(s, message, err)
-	}, "Read")
-}
-
-func (sm *ServerManager) ReadTimed(duration time.Duration, timeoutMessage *Message, callback func(*Server, *Message, error)) {
-	sm.MapExec(func(s *Server) {
-		message, err := s.ReadTimed(duration, timeoutMessage)
-		callback(s, message, err)
-	}, "ReadTimed")
-}
-
 func (s *Server) run(clientId int) (*Server, error) {
 
 	var socketName string
@@ -262,14 +218,21 @@ func (s *Server) ByteReader(a *Actor, buff []byte) bool {
 	return true
 }
 
-// Close - closes the connection
-func (s *Server) Close() {
+func (s *Server) close() {
 
 	s.Actor.Close()
 
-	for _, srv := range s.ServerManager.Servers {
-		if srv.listener != nil {
-			srv.listener.Close()
-		}
+	if s.listener != nil {
+		s.listener.Close()
+	}
+}
+
+// Close - closes the connection
+func (s *Server) Close() {
+
+	if s.config.ServerConfig.MultiClient {
+		s.ServerManager.Close()
+	} else {
+		s.close()
 	}
 }
