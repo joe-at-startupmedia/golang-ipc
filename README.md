@@ -5,9 +5,11 @@
 Golang Inter-process communication library for Mac/Linux forked from [james-barrow/golang-ipc](https://github.com/james-barrow/golang-ipc) with the following features added:
 * Adds the configurable ability to spawn multiple clients. In order to allow multiple client connections, multiple socket connections are dynamically allocated
 * Adds `ReadTimed` methods which return after the `time.Duration` provided
-* Adds a `ServerManager` instance to easily poll read requests from multiple clients
+* Adds a `ServerManager` instance to easily poll read requests from multiple clients and easily close connections
 * Adds improved logging for better visibility
 * Removes race conditions by using `sync.Mutex` locks
+* Improves and adds more tests
+* Makes both `StartClient` and `StartServer` blocking such that no `time.Sleep` calls are necessary when immediately creating a client after a server. All tests are ran with 0 millisecond wait times using `IPC_WAIT=0`
 * Removes Windows support (oh wait, that's not a feature?)
 
 
