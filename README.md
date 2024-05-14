@@ -1,6 +1,7 @@
 # golang-ipc
 
 [![Testing](https://github.com/joe-at-startupmedia/golang-ipc/actions/workflows/testing.yml/badge.svg)](https://github.com/joe-at-startupmedia/golang-ipc/actions/workflows/testing.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/joe-at-startupmedia/golang-ipc)](https://goreportcard.com/report/github.com/joe-at-startupmedia/golang-ipc)
 
 Golang Inter-process communication library for Mac/Linux forked from [james-barrow/golang-ipc](https://github.com/james-barrow/golang-ipc) with the following features added:
 * Adds the configurable ability to spawn multiple clients. In order to allow multiple client connections, multiple socket connections are dynamically allocated
