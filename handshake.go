@@ -7,7 +7,7 @@ import (
 )
 
 // 1st message sent from the server
-// byte 0 = protocal VERSION no.
+// byte 0 = protocol VERSION no.
 func (sc *Server) handshake() error {
 
 	err := sc.one()

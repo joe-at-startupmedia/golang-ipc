@@ -43,8 +43,8 @@ func NewActor(ac *ActorConfig) Actor {
 	}
 }
 
-// Read - blocking function, reads each message recieved
-// if MsgType is a negative number its an internal message
+// Read - blocking function, reads each message received
+// if MsgType is a negative number it's an internal message
 func (a *Actor) Read() (*Message, error) {
 
 	m, ok := <-a.received

@@ -103,7 +103,7 @@ func StartMultiServer(config *ServerConfig) (*Server, error) {
 			msgData := string(message.Data)
 
 			if err == nil && msgType == CLIENT_CONNECT_MSGTYPE && msgData == "client_id_request" {
-				cms.logger.Infof("recieved a request to create a new client server %d", ClientCount+1)
+				cms.logger.Infof("received a request to create a new client server %d", ClientCount+1)
 				ns, err := NewServer(configName, config)
 				if err == nil {
 					ClientCount++
