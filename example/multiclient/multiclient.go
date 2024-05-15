@@ -118,7 +118,6 @@ func server() *ipc.Server {
 	s, err := ipc.StartServer(&ipc.ServerConfig{Name: CONN_NAME, MultiClient: true, Encryption: ipc.ENCRYPT_BY_DEFAULT})
 	if err != nil {
 		panic(err)
-		return nil
 	}
 
 	startTime := time.Now()
