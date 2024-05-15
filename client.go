@@ -14,9 +14,14 @@ import (
 // ipcName = is the name of the unix socket or named pipe that the client will try and connect to.
 func StartClient(config *ClientConfig) (*Client, error) {
 	if config.MultiClient {
-		return StartMultiClient(config)
+		return StartClientPool(config)
 	} else {
-		return StartOnlyClient(config)
+		cc, err := NewClient(config.Name, config)
+		if err != nil {
+			return nil, err
+		}
+		cc.ClientId = 0
+		return start(cc)
 	}
 }
 
@@ -54,60 +59,6 @@ func NewClient(name string, config *ClientConfig) (*Client, error) {
 	}
 
 	return cc, err
-}
-
-func StartOnlyClient(config *ClientConfig) (*Client, error) {
-	cc, err := NewClient(config.Name, config)
-	if err != nil {
-		return nil, err
-	}
-	cc.ClientId = 0
-	return start(cc)
-}
-
-func StartMultiClient(config *ClientConfig) (*Client, error) {
-
-	//copy to prevent modification of the reference
-	configName := config.Name
-
-	cm, err := NewClient(configName+"_manager", config)
-	if err != nil {
-		return nil, err
-	}
-
-	cm, err = start(cm)
-
-	if err != nil {
-		return nil, err
-	}
-
-	err = cm.Write(CLIENT_CONNECT_MSGTYPE, []byte("client_id_request"))
-
-	if err != nil {
-		return nil, err
-	}
-
-	for {
-		message, err := cm.ReadTimed(5*time.Second, TimeoutMessage)
-
-		msgType := message.MsgType
-		msgData := bytesToInt(message.Data)
-
-		if err == nil && msgType == CLIENT_CONNECT_MSGTYPE && msgData > 0 {
-
-			cm.logger.Infof("Attempting to create a new Client %d, %s", msgData, message.Data)
-
-			cc, err := NewClient(configName, config)
-			if err != nil {
-				return nil, err
-			}
-			cc.ClientId = msgData
-			cm.Close()
-			return start(cc)
-		} else {
-			cm.logger.Debugf("err: %s, msgType: %d, msgData: %d", err, msgType, msgData)
-		}
-	}
 }
 
 func (c *Client) getSocketName() string {

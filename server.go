@@ -5,19 +5,20 @@ import (
 	"io"
 	"net"
 	"os"
-	"sync"
 	"syscall"
 )
 
 // StartServer - starts the ipc server.
-//
-// ipcName - is the name of the unix socket or named pipe that will be created, the client needs to use the same name
 func StartServer(config *ServerConfig) (*Server, error) {
 
 	if config.MultiClient {
-		return StartMultiServer(config)
+		return StartServerPool(config)
 	} else {
-		return StartOnlyServer(config)
+		s, err := NewServer(config.Name, config)
+		if err != nil {
+			return nil, err
+		}
+		return s.run(0)
 	}
 }
 
@@ -45,85 +46,6 @@ func NewServer(name string, config *ServerConfig) (*Server, error) {
 		}
 	}
 	return s, err
-}
-
-func StartOnlyServer(config *ServerConfig) (*Server, error) {
-
-	s, err := NewServer(config.Name, config)
-	if err != nil {
-		return nil, err
-	}
-	s.ServerManager = &ServerManager{
-		Servers:      []*Server{{}, s}, //we add an empty server in case we need to MapExec
-		ServerConfig: config,
-		Logger:       s.logger,
-		mutex:        &sync.Mutex{},
-	}
-
-	return s.run(0)
-}
-
-func StartMultiServer(config *ServerConfig) (*Server, error) {
-
-	//well be modifying the config.Name property by reference
-	configName := config.Name
-
-	cms, err := NewServer(configName+"_manager", config)
-	if err != nil {
-		return nil, err
-	}
-	cms, err = cms.run(0)
-	if err != nil {
-		return nil, err
-	}
-
-	s, err := NewServer(configName, config)
-	if err != nil {
-		return nil, err
-	}
-	s.ServerManager = &ServerManager{
-		Servers:      []*Server{cms, s},
-		ServerConfig: config,
-		Logger:       s.logger,
-		mutex:        &sync.Mutex{},
-	}
-
-	ClientCount := 0
-
-	go func() {
-		for {
-
-			message, err := cms.Read()
-			if err != nil {
-				s.logger.Errorf("ServerManager.read err: %s", err)
-				s.dispatchError(err)
-				continue
-			}
-			msgType := message.MsgType
-			msgData := string(message.Data)
-
-			if err == nil && msgType == CLIENT_CONNECT_MSGTYPE && msgData == "client_id_request" {
-				cms.logger.Infof("received a request to create a new client server %d", ClientCount+1)
-				ns, err := NewServer(configName, config)
-				if err == nil {
-					ClientCount++
-					cms.Write(CLIENT_CONNECT_MSGTYPE, intToBytes(ClientCount))
-					if ClientCount == 1 {
-						//we already pre-provisioned the first client
-						continue
-					}
-					go ns.run(ClientCount)
-					s.ServerManager.mutex.Lock()
-					s.ServerManager.Servers = append(s.ServerManager.Servers, ns)
-					s.ServerManager.mutex.Unlock()
-				} else {
-					cms.logger.Errorf("encountered an error attempting to create a client server %d %s", ClientCount+1, err)
-				}
-			}
-		}
-	}()
-
-	return s.run(1)
 }
 
 func (s *Server) run(clientId int) (*Server, error) {
@@ -231,7 +153,7 @@ func (s *Server) close() {
 func (s *Server) Close() {
 
 	if s.config.ServerConfig.MultiClient {
-		s.ServerManager.Close()
+		s.Connections.Close()
 	} else {
 		s.close()
 	}

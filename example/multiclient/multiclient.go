@@ -3,61 +3,69 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	ipc "github.com/joe-at-startupmedia/golang-ipc"
 )
 
-// prevents a race condition where the client attempts to connect before the server begins listening
-var serverErrorChan = make(chan error, 1)
-var serverChan = make(chan *ipc.Server, 1)
+const CONN_NAME = "example_multi"
 
 func main() {
 
-	go server()
-	err := <-serverErrorChan
-	srv := <-serverChan
-	if err != nil {
-		log.Printf("server error %s:", err)
-		main()
-	}
+	s := server()
+	defer s.Close()
 
 	// change the sleep time by using IPC_WAIT env variable (seconds)
 	ipc.Sleep()
 
-	clientConfig := &ipc.ClientConfig{Name: "example-multi", MultiClient: true, Encryption: ipc.ENCRYPT_BY_DEFAULT}
-
+	clientConfig := &ipc.ClientConfig{Name: CONN_NAME, MultiClient: true, Encryption: ipc.ENCRYPT_BY_DEFAULT}
 	c1, err := ipc.StartClient(clientConfig)
 	if err != nil {
-		log.Printf("client error %s:", err)
-		main()
+		panic(err)
 	}
+	defer c1.Close()
 
 	ipc.Sleep()
 
 	c2, err := ipc.StartClient(clientConfig)
 	if err != nil {
-		log.Printf("client error %s:", err)
-		main()
+		panic(err)
 	}
-
-	serverPonger(c2, false)
+	defer c2.Close()
 
 	ipc.Sleep()
 
-	serverPonger(c1, false)
+	c3, err := ipc.StartClient(clientConfig)
+	if err != nil {
+		panic(err)
+	}
+	defer c3.Close()
+
+	serverPonger(c2, false)
+	//time.Sleep(6 * time.Second)
+
+	ipc.Sleep()
+
+	wg := make(chan bool, 1)
+	go func() {
+		time.Sleep(5 * time.Second)
+		serverPonger(c1, false)
+		ipc.Sleep()
+		wg <- true
+	}()
+
+	serverPonger(c3, false)
 
 	ipc.Sleep()
 
 	serverPonger(c2, true)
 
+	//time.Sleep(20 * time.Second)
 	ipc.Sleep()
 
-	srv.Close()
-	c1.Close()
-	c2.Close()
-
-	ipc.Sleep()
+	//time.Sleep(1 * time.Second)
+	<-wg
 }
 
 func serverPonger(c *ipc.Client, autosend bool) {
@@ -66,86 +74,92 @@ func serverPonger(c *ipc.Client, autosend bool) {
 
 	if autosend {
 		c.Write(5, []byte(pongMessage))
+		return
 	}
 
 	for {
 
-		message, err := c.ReadTimed(5*time.Second, ipc.TimeoutMessage)
+		message, err := c.ReadTimed(5 * time.Second)
 
-		if err == nil && c.StatusCode() != ipc.Connecting {
-
-			//log.Printf("Client(%d) received: %s - Message type: %d, Message Status %s", c.ClientId, string(message.Data), message.MsgType, message.Status)
-
-			if message.MsgType == -1 {
-
-				log.Println("client status", c.Status())
-
-				if message.Status == "Reconnecting" {
-					c.Close()
-					return
-				} else if message.Status == "Connected" {
-					c.Write(5, []byte(pongMessage))
-				}
-
-			} else if message != ipc.TimeoutMessage {
-
-				log.Printf("Client(%d) received: %s - Message type: %d", c.ClientId, string(message.Data), message.MsgType)
-				break
-			}
-
+		if message == ipc.TimeoutMessage {
+			continue
 		} else if err != nil {
-			log.Println("Read err: ", err)
-			//this happens in rare edge cases when the client attempts to connect too fast after server is listening
+			log.Println("Client Read err: ", err)
 			if err.Error() == "Client.Read timed out" {
-				main()
-				break
+				panic(err)
 			}
-			//break
-		} else {
-			log.Println("client status", c.Status())
+			continue
 		}
+
+		if message.MsgType == -1 { //internal message
+
+			log.Println("client status", c.Status())
+
+			if message.Status == "Reconnecting" {
+				panic("Reconnecting")
+			}
+
+		} else { //user message
+			log.Printf("Client(%d) received: %s - Message type: %d", c.ClientId, string(message.Data), message.MsgType)
+			err2 := c.Write(5, []byte(pongMessage))
+			if err2 != nil {
+				log.Println("Client Write  err: ", err)
+			}
+			break
+		}
+
 		ipc.Sleep()
 	}
 
 }
 
-func server() {
+func server() *ipc.Server {
 
-	srv, err := ipc.StartServer(&ipc.ServerConfig{Name: "example-multi", MultiClient: true, Encryption: ipc.ENCRYPT_BY_DEFAULT})
-	serverErrorChan <- err
-
+	s, err := ipc.StartServer(&ipc.ServerConfig{Name: CONN_NAME, MultiClient: true, Encryption: ipc.ENCRYPT_BY_DEFAULT})
 	if err != nil {
-		log.Println("server error", err)
+		panic(err)
+		return nil
+	}
+
+	startTime := time.Now()
+	useFastest := os.Getenv("FAST") == "true"
+
+	go func() {
+		for {
+
+			// we need to use the ReadTimed in order to poll all new clients
+			if useFastest {
+				s.Connections.ReadTimedFastest(5*time.Second, onReadTimedFinish)
+			} else {
+				s.Connections.ReadTimed(5*time.Second, onReadTimedFinish)
+			}
+
+			fmt.Printf("server.ReadTimed next iteration after (%s) seconds since start \n", time.Since(startTime))
+		}
+	}()
+
+	return s
+}
+
+func onReadTimedFinish(srv *ipc.Server, message *ipc.Message, err error) {
+	if message == ipc.TimeoutMessage {
+		return
+	} else if err != nil {
+		log.Println("Read err: ", err)
 		return
 	}
 
-	serverChan <- srv
-	//log.Println("server status", srv.Status())
+	if message.MsgType == -1 { //internal message
 
-	for {
-		//log.Println("server status loop", srv.Status())
-		// we need to use the ReadTimed in order to poll all new clients
-		srv.ServerManager.ReadTimed(5*time.Second, ipc.TimeoutMessage, func(s *ipc.Server, message *ipc.Message, err error) {
-			if err == nil {
+		log.Println("server status", srv.Status())
 
-				if message.MsgType == -1 {
+		if message.Status == "Connected" {
+			log.Println("server sending ping: status", srv.Status())
+			srv.Write(1, []byte("server - PING"))
+		}
 
-					if message.Status == "Connected" {
+	} else { //user message
 
-						log.Println("server sending ping: status", s.Status())
-						s.Write(1, []byte("server - PING"))
-
-					}
-
-				} else if message != ipc.TimeoutMessage {
-
-					log.Println("Server received: "+string(message.Data)+" - Message type: ", message.MsgType)
-					s.Write(1, []byte("server - PING"))
-				}
-
-			} else {
-				log.Println("Read err: ", err)
-			}
-		})
+		log.Println("Server received: "+string(message.Data)+" - Message type: ", message.MsgType)
 	}
 }

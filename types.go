@@ -23,8 +23,8 @@ type Actor struct {
 // Server - holds the details of the server connection & config.
 type Server struct {
 	Actor
-	listener      net.Listener
-	ServerManager *ServerManager
+	listener    net.Listener
+	Connections *ConnectionPool
 }
 
 // Client - holds the details of the client connection and config.
@@ -36,7 +36,7 @@ type Client struct {
 	maxMsgSize int //set in the handshake process dictated by the ServerConfig.MaxMsgSize value
 }
 
-type ServerManager struct {
+type ConnectionPool struct {
 	Servers      []*Server
 	ServerConfig *ServerConfig
 	Logger       *logrus.Logger

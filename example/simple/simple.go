@@ -6,39 +6,24 @@ import (
 	"log"
 )
 
-// prevents a race condition where the client attempts to connect before the server begins listening
-var serverErrorChan = make(chan error, 1)
-var serverChan = make(chan *ipc.Server, 1)
+const CONN_NAME = "example_simple"
 
 func main() {
 
-	go server()
-	err := <-serverErrorChan
-	srv := <-serverChan
-	if err != nil {
-		log.Printf("server error %s:", err)
-		main()
-	}
+	s := server()
+	defer s.Close()
 
 	// change the sleep time by using IPC_WAIT env variable (seconds)
 	ipc.Sleep()
 
-	clientConfig := &ipc.ClientConfig{Name: "example-simple", Encryption: ipc.ENCRYPT_BY_DEFAULT}
-
+	clientConfig := &ipc.ClientConfig{Name: CONN_NAME, Encryption: ipc.ENCRYPT_BY_DEFAULT}
 	c1, err := ipc.StartClient(clientConfig)
 	if err != nil {
-		log.Printf("client error %s:", err)
-		main()
+		panic(err)
 	}
-
-	ipc.Sleep()
+	defer c1.Close()
 
 	serverPonger(c1)
-
-	ipc.Sleep()
-
-	c1.Close()
-	srv.Close()
 
 	ipc.Sleep()
 }
@@ -51,81 +36,73 @@ func serverPonger(c *ipc.Client) {
 
 		message, err := c.Read()
 
-		if err == nil && c.StatusCode() != ipc.Connecting {
-
-			//log.Printf("Client(%d) received: %s - Message type: %d, Message Status %s", c.ClientId, string(message.Data), message.MsgType, message.Status)
-
-			if message.MsgType == -1 {
-
-				log.Println("client status", c.Status())
-
-				if message.Status == "Reconnecting" {
-					c.Close()
-					return
-				} else if message.Status == "Connected" {
-					c.Write(5, []byte(pongMessage))
-				}
-
-			} else if message != ipc.TimeoutMessage {
-
-				log.Printf("Client(%d) received: %s - Message type: %d", c.ClientId, string(message.Data), message.MsgType)
-				break
-			}
-
-		} else if err != nil {
+		if err != nil {
 			log.Println("Read err: ", err)
-			//this happens in rare edge cases when the client attempts to connect too fast after server is listening
 			if err.Error() == "Client.Read timed out" {
-				main()
-				break
+				panic(err)
 			}
-			//break
-		} else {
-			log.Println("client status", c.Status())
+			continue
 		}
+
+		//internal message
+		if message.MsgType == -1 {
+
+			log.Println("client status", c.Status())
+
+			if message.Status == "Reconnecting" {
+				panic(message.Status)
+			} else if message.Status == "Connected" {
+				c.Write(5, []byte(pongMessage))
+			}
+
+			//user message
+		} else {
+
+			log.Printf("Client(%d) received: %s - Message type: %d", c.ClientId, string(message.Data), message.MsgType)
+			break
+		}
+
 		ipc.Sleep()
 	}
 
 }
 
-func server() {
+func server() *ipc.Server {
 
-	srv, err := ipc.StartServer(&ipc.ServerConfig{Name: "example-simple", Encryption: ipc.ENCRYPT_BY_DEFAULT})
-	serverErrorChan <- err
-
+	s, err := ipc.StartServer(&ipc.ServerConfig{Name: CONN_NAME, Encryption: ipc.ENCRYPT_BY_DEFAULT})
 	if err != nil {
-		log.Println("server error", err)
-		return
+		panic(err)
 	}
 
-	serverChan <- srv
-	//log.Println("server status", srv.Status())
-
-	for {
-		msg, err := srv.Read()
-		server_onRead(srv, msg, err)
-	}
-}
-
-func server_onRead(s *ipc.Server, message *ipc.Message, err error) {
-	if err == nil {
-
-		if message.MsgType == -1 {
-
-			if message.Status == "Connected" {
-
-				log.Println("server sending ping: status", s.Status())
-				s.Write(1, []byte("server - PING"))
-
+	go func() {
+		for {
+			msg, err2 := s.Read()
+			if err2 != nil {
+				log.Println("Server Read err: ", err2)
+				continue
 			}
 
-		} else if message != ipc.TimeoutMessage {
+			//internal message
+			if msg.MsgType == -1 {
 
-			log.Println("Server received: "+string(message.Data)+" - Message type: ", message.MsgType)
-			s.Write(1, []byte("server - PING"))
+				if msg.Status == "Connected" {
+
+					log.Println("server sending ping: status", s.Status())
+					s.Write(1, []byte("server - PING"))
+
+				} else if msg.Status == "Closed" {
+					return
+				}
+
+				//user message
+			} else {
+
+				log.Println("Server received: "+string(msg.Data)+" - Message type: ", msg.MsgType)
+				s.Write(1, []byte("server - PING"))
+			}
+
 		}
+	}()
 
-	} else {
-		log.Println("Read err: ", err)
-	}
+	return s
 }

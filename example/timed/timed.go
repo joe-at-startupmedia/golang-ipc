@@ -7,39 +7,24 @@ import (
 	"time"
 )
 
-// prevents a race condition where the client attempts to connect before the server begins listening
-var serverErrorChan = make(chan error, 1)
-var serverChan = make(chan *ipc.Server, 1)
+const CONN_NAME = "example_timed"
 
 func main() {
 
-	go server()
-	err := <-serverErrorChan
-	srv := <-serverChan
-	if err != nil {
-		log.Printf("server error %s:", err)
-		main()
-	}
+	s := server()
+	defer s.Close()
 
 	// change the sleep time by using IPC_WAIT env variable (seconds)
 	ipc.Sleep()
 
-	clientConfig := &ipc.ClientConfig{Name: "example-simple", Encryption: ipc.ENCRYPT_BY_DEFAULT}
-
+	clientConfig := &ipc.ClientConfig{Name: CONN_NAME, Encryption: ipc.ENCRYPT_BY_DEFAULT}
 	c1, err := ipc.StartClient(clientConfig)
 	if err != nil {
-		log.Printf("client error %s:", err)
-		main()
+		panic(err)
 	}
-
-	ipc.Sleep()
+	defer c1.Close()
 
 	serverPonger(c1)
-
-	ipc.Sleep()
-
-	c1.Close()
-	srv.Close()
 
 	ipc.Sleep()
 }
@@ -50,83 +35,80 @@ func serverPonger(c *ipc.Client) {
 
 	for {
 
-		message, err := c.ReadTimed(time.Second*5, ipc.TimeoutMessage)
+		message, err := c.ReadTimed(time.Second * 5)
 
-		if err == nil && c.StatusCode() != ipc.Connecting {
-
-			//log.Printf("Client(%d) received: %s - Message type: %d, Message Status %s", c.ClientId, string(message.Data), message.MsgType, message.Status)
-
-			if message.MsgType == -1 {
-
-				log.Println("client status", c.Status())
-
-				if message.Status == "Reconnecting" {
-					c.Close()
-					return
-				} else if message.Status == "Connected" {
-					c.Write(5, []byte(pongMessage))
-				}
-
-			} else {
-
-				log.Printf("Client(%d) received: %s - Message type: %d", c.ClientId, string(message.Data), message.MsgType)
-				break
-			}
-
+		if message == ipc.TimeoutMessage {
+			continue
 		} else if err != nil {
 			log.Println("Read err: ", err)
 			//this happens in rare edge cases when the client attempts to connect too fast after server is listening
 			if err.Error() == "Client.Read timed out" {
-				main()
-				break
+				panic(err)
 			}
-			//break
-		} else {
-			log.Println("client status", c.Status())
+			continue
 		}
+
+		if message.MsgType == -1 {
+
+			log.Println("client status", c.Status())
+
+			if message.Status == "Reconnecting" {
+				c.Close()
+				return
+			} else if message.Status == "Connected" {
+				c.Write(5, []byte(pongMessage))
+			}
+
+		} else {
+
+			log.Printf("Client(%d) received: %s - Message type: %d", c.ClientId, string(message.Data), message.MsgType)
+			break
+		}
+
 		ipc.Sleep()
 	}
 
 }
 
-func server() {
+func server() *ipc.Server {
 
-	srv, err := ipc.StartServer(&ipc.ServerConfig{Name: "example-simple", Encryption: ipc.ENCRYPT_BY_DEFAULT})
-	serverErrorChan <- err
-
+	s, err := ipc.StartServer(&ipc.ServerConfig{Name: CONN_NAME, Encryption: ipc.ENCRYPT_BY_DEFAULT})
 	if err != nil {
-		log.Println("server error", err)
-		return
+		panic(err)
 	}
 
-	serverChan <- srv
-	//log.Println("server status", srv.Status())
+	go func() {
+		for {
+			msg, err2 := s.ReadTimed(time.Second * 5)
 
-	for {
-		msg, err := srv.ReadTimed(time.Second*5, ipc.TimeoutMessage)
-		server_onRead(srv, msg, err)
-	}
-}
-
-func server_onRead(s *ipc.Server, message *ipc.Message, err error) {
-	if err == nil {
-
-		if message.MsgType == -1 {
-
-			if message.Status == "Connected" {
-
-				log.Println("server sending ping: status", s.Status())
-				s.Write(1, []byte("server - PING"))
-
+			if msg == ipc.TimeoutMessage {
+				continue
+			} else if err2 != nil {
+				log.Println("Server Read err: ", err)
+				continue
 			}
 
-		} else {
+			//internal message
+			if msg.MsgType == -1 {
 
-			log.Println("Server received: "+string(message.Data)+" - Message type: ", message.MsgType)
-			s.Write(1, []byte("server - PING"))
+				log.Printf("Server status: %s", s.Status())
+
+				if msg.Status == "Connected" {
+
+					log.Println("server sending ping: status", s.Status())
+					s.Write(1, []byte("server - PING"))
+				} else if msg.Status == "Closed" {
+					return
+				}
+
+				//user message
+			} else {
+
+				log.Println("Server received: "+string(msg.Data)+" - Message type: ", msg.MsgType)
+				s.Write(1, []byte("server - PING"))
+			}
 		}
+	}()
 
-	} else {
-		log.Println("Read err: ", err)
-	}
+	return s
 }

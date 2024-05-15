@@ -7,11 +7,11 @@
 Golang Inter-process communication library for Mac/Linux forked from [james-barrow/golang-ipc](https://github.com/james-barrow/golang-ipc) with the following features added:
 * Adds the configurable ability to spawn multiple clients. In order to allow multiple client connections, multiple socket connections are dynamically allocated
 * Adds `ReadTimed` methods which return after the `time.Duration` provided
-* Adds a `ServerManager` instance to easily poll read requests from multiple clients and easily close connections
+* Adds a `ConnectionPool` instance to easily poll read requests from multiple clients and easily close connections
 * Adds improved logging for better visibility
 * Removes race conditions by using `sync.Mutex` locks
 * Improves and adds more tests
-* Makes both `StartClient` and `StartServer` blocking such that no `time.Sleep` calls are necessary when immediately creating a client after a server. All tests are ran with 0 millisecond wait times using `IPC_WAIT=0`
+* Makes both `StartClient` and `StartServer` blocking, omitting the need for `time.Sleep` between Server and Client instantiation. All tests are ran with 0 millisecond wait times using `IPC_WAIT=0`
 * Removes Windows support (oh wait, that's not a feature?)
 
 
@@ -64,31 +64,62 @@ Read each message sent until a specific duration has surpassed.
 ```go
 for {
 
-	message, err := c.ReadTimed(5*time.Second, ipc.TimeoutMessage)
+	message, err := c.ReadTimed(5*time.Second)
+	
+	if  message == ipc.TimeoutMessage {
+		continue
+    }   
 	
 	if err == nil && c.StatusCode() != ipc.Connecting {
 	
-	} else if message != ipc.TimeoutMessage {
-	
-	}
+	} 
 }
 ```
+
+### MultiClient Mode
 
 Allow polling of newly created clients on each iteration until a specific duration has surpassed. 
 
 ```go
+s, err := ipc.StartServer(&ServerConfig{Name:"<name of connection>", MultiClient: true})
+    if err != nil {
+    log.Println(err)
+    return
+}
+
 for {
-	srv.ServerManager.ReadTimed(5*time.Second, ipc.TimeoutMessage, func(s *ipc.Server, message *ipc.Message, err error) {
-		if err == nil {
-		
-		if message.MsgType == -1 && message.Status == "Connected" {
-		
-		} else if message != ipc.TimeoutMessage {
-		
-		}
-	})
+    s.Connections.ReadTimed(5*time.Second, func(srv *ipc.Server, message *ipc.Message, err error) {
+        if  message == ipc.TimeoutMessage {
+            continue
+        }
+        
+        if message.MsgType == -1 && message.Status == "Connected" {
+        
+        }
+    })
 }
 ```
+
+* `Server.Connections.ReadTimed` will block until the slowest ReadTimed callback completes. 
+* `Server.Connections.ReadTimedFastest` will unblock after the first ReadTimed callback completes.
+
+While `ReadTimedFastest` will result in faster iterations, it will also result in more running goroutines in scenarios where clients requests are not evenly distributed. 
+
+To get a better idea of how these work, run the following examples: 
+
+Using `ReadTimed`:
+```bash
+go run --race example/multiclient/multiclient.go
+```
+
+Using `ReadTimedFastest`: 
+```bash
+FAST=true go run --race example/multiclient/multiclient.go
+```
+
+Notice that the Server receives messages faster and the process will finish faster
+
+### Message Struct
 
 All received messages are formatted into the type Message
 

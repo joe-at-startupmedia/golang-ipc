@@ -68,7 +68,11 @@ func (a *Actor) Read() (*Message, error) {
 	return m, nil
 }
 
-func (a *Actor) ReadTimed(duration time.Duration, onTimeoutMessage *Message) (*Message, error) {
+func (a *Actor) ReadTimed(duration time.Duration) (*Message, error) {
+	return a.ReadTimedTimeoutMessage(duration, TimeoutMessage)
+}
+
+func (a *Actor) ReadTimedTimeoutMessage(duration time.Duration, onTimeoutMessage *Message) (*Message, error) {
 
 	readMsgChan := make(chan *Message, 1)
 	readErrChan := make(chan error, 1)
@@ -97,6 +101,10 @@ func (a *Actor) ReadTimed(duration time.Duration, onTimeoutMessage *Message) (*M
 	case msg := <-readMsgChan:
 		return msg, <-readErrChan
 	}
+}
+
+func (a *Actor) WriteMessage(msg *Message) error {
+	return a.Write(msg.MsgType, msg.Data)
 }
 
 // Write - writes a  message to the ipc connection.

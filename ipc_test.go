@@ -1266,21 +1266,20 @@ func TestServerReconnect2(t *testing.T) {
 		case <-hasReconnected:
 			return
 		default:
-			sc.ServerManager.ReadTimed(2*time.Second, TimeoutMessage, func(_ *Server, m *Message, err error) {
-				if m.Status == "Connected" && connect == false {
-					hasConnected <- true
-					connect = true
-				}
+			m, _ := sc.Read()
+			if m.Status == "Connected" && connect == false {
+				hasConnected <- true
+				connect = true
+			}
 
-				if m.Status == "Disconnected" {
-					hasDisconnected <- true
-					disconnect = true
-				}
+			if m.Status == "Disconnected" {
+				hasDisconnected <- true
+				disconnect = true
+			}
 
-				if m.Status == "Connected" && connect == true && disconnect == true {
-					hasReconnected <- true
-				}
-			})
+			if m.Status == "Connected" && connect == true && disconnect == true {
+				hasReconnected <- true
+			}
 		}
 	}
 }
@@ -1327,7 +1326,7 @@ func TestServerReconnectMulti(t *testing.T) {
 
 		for {
 			//We used ReadTimed in order to scan client buffer on the next loop
-			sc.ServerManager.ReadTimed(2*time.Second, TimeoutMessage, func(_ *Server, m *Message, err error) {
+			sc.Connections.ReadTimed(2*time.Second, func(_ *Server, m *Message, err error) {
 
 				if err != nil {
 					return
@@ -1433,7 +1432,7 @@ func TestServerReconnect2Multi(t *testing.T) {
 		case <-hasReconnected:
 			return
 		default:
-			sc.ServerManager.ReadTimed(2*time.Second, TimeoutMessage, func(_ *Server, m *Message, err error) {
+			sc.Connections.ReadTimed(2*time.Second, func(_ *Server, m *Message, err error) {
 				if m.Status == "Connected" && connect == false {
 					hasConnected <- true
 					connect = true
