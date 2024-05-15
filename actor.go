@@ -2,6 +2,7 @@ package ipc
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/sirupsen/logrus"
@@ -69,43 +70,33 @@ func (a *Actor) Read() (*Message, error) {
 
 func (a *Actor) ReadTimed(duration time.Duration, onTimeoutMessage *Message) (*Message, error) {
 
-	readFinished := make(chan bool, 1)
 	readMsgChan := make(chan *Message, 1)
 	readErrChan := make(chan error, 1)
 
-	go func() {
-		select {
-		case <-time.After(duration):
-			readMsgChan <- onTimeoutMessage
-			readErrChan <- nil
-
-			//requeue the message when the Read task does finally finish
-			<-readFinished
-			msg := <-readMsgChan
-			if msg != nil && a.getStatus() <= Connected {
-				a.logger.Debugf("%s.ReadTimed recycling timed-out message %s", a, msg.Data)
-				a.received <- msg
-			}
-			return
-		case <-readFinished:
-			return
-		}
-	}()
+	ctx, cancel := context.WithTimeout(context.Background(), duration)
+	defer cancel()
 
 	go func() {
 		m, err := a.Read()
-		readFinished <- true
 		readMsgChan <- m
 		readErrChan <- err
 	}()
 
-	err := <-readErrChan
-	if err != nil {
-		return nil, err
-	}
+	select {
+	case <-ctx.Done():
 
-	msg := <-readMsgChan
-	return msg, nil
+		go func() {
+			//requeue the message when the Read task does finally finish
+			msg := <-readMsgChan
+			if msg != nil && a.getStatus() < Closed {
+				a.logger.Debugf("%s.ReadTimed recycling timed-out message %s", a, msg.Data)
+				a.received <- msg
+			}
+		}()
+		return onTimeoutMessage, nil
+	case msg := <-readMsgChan:
+		return msg, <-readErrChan
+	}
 }
 
 // Write - writes a  message to the ipc connection.

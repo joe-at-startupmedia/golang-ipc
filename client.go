@@ -1,6 +1,7 @@
 package ipc
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -46,8 +47,8 @@ func NewClient(name string, config *ClientConfig) (*Client, error) {
 		cc.timeout = config.Timeout
 	}
 
-	if config.RetryTimer < 0 {
-		cc.retryTimer = 0
+	if config.RetryTimer <= 0 {
+		cc.retryTimer = 1 * time.Second
 	} else {
 		cc.retryTimer = config.RetryTimer
 	}
@@ -66,7 +67,7 @@ func StartOnlyClient(config *ClientConfig) (*Client, error) {
 
 func StartMultiClient(config *ClientConfig) (*Client, error) {
 
-	//well be modifying the config.Name property by reference
+	//copy to prevent modification of the reference
 	configName := config.Name
 
 	cm, err := NewClient(configName+"_manager", config)
@@ -123,14 +124,8 @@ func start(c *Client) (*Client, error) {
 	err := c.dial()
 
 	if err != nil {
-		if c.retryTimer > 0 {
-			time.Sleep(c.retryTimer)
-			c.logger.Warn()
-			return start(c)
-		} else {
-			c.dispatchError(err)
-			return c, err
-		}
+		c.dispatchError(err)
+		return c, err
 	}
 
 	go c.read(c.ByteReader)
@@ -143,40 +138,50 @@ func start(c *Client) (*Client, error) {
 // Client connect to the unix socket created by the server -  for unix and linux
 func (c *Client) dial() error {
 
-	startTime := time.Now()
+	errChan := make(chan error, 1)
 
-	for {
-
-		if c.timeout != 0 {
-			if time.Since(startTime) > c.timeout {
-				c.setStatus(Closed)
-				return errors.New("timed out trying to connect")
+	go func() {
+		startTime := time.Now()
+		for {
+			if c.timeout != 0 {
+				if time.Since(startTime) > c.timeout {
+					return
+				}
 			}
-		}
-		conn, err := net.Dial("unix", c.getSocketName())
-		if err != nil {
-			c.logger.Debugf("Client.dial err: %s", err)
-			//connect: no such file or directory happens a lot when the client connection closes under normal circumstances
-			if !strings.Contains(err.Error(), "connect: no such file or directory") &&
-				!strings.Contains(err.Error(), "connect: connection refused") {
-				c.dispatchError(err)
-
-			} else {
-				time.Sleep(time.Second * 1)
-			}
-
-		} else {
-			c.setConn(conn)
-			err = c.handshake()
+			conn, err := net.Dial("unix", c.getSocketName())
 			if err != nil {
-				c.logger.Errorf("%s.dial handshake err: %s", c, err)
-				return err
+				c.logger.Debugf("Client.dial err: %s", err)
+				//connect: no such file or directory happens a lot when the client connection closes under normal circumstances
+				if !strings.Contains(err.Error(), "connect: no such file or directory") &&
+					!strings.Contains(err.Error(), "connect: connection refused") {
+					c.dispatchError(err)
+				}
+			} else {
+				c.setConn(conn)
+				err = c.handshake()
+				if err != nil {
+					c.logger.Errorf("%s.dial handshake err: %s", c, err)
+				}
+
+				errChan <- err
+				return
 			}
 
-			return nil
+			time.Sleep(c.retryTimer)
 		}
+	}()
 
-		time.Sleep(c.retryTimer)
+	if c.timeout != 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+		defer cancel()
+		select {
+		case <-ctx.Done():
+			return errors.New("timed out trying to connect")
+		case err := <-errChan:
+			return err
+		}
+	} else {
+		return <-errChan
 	}
 }
 
@@ -212,7 +217,10 @@ func reconnect(c *Client) {
 	c.logger.Warn("Client.reconnect called")
 	c.dispatchStatus(ReConnecting)
 
-	err := c.dial() // connect to the pipe
+	// IMPORTANT removing this line will allow a dial before the new connection
+	// is ready resulting in a dial hang when a timeout is not specified
+	time.Sleep(c.retryTimer)
+	err := c.dial()
 	if err != nil {
 		c.logger.Errorf("Client.reconnect -> dial err: %s", err)
 		if err.Error() == "timed out trying to connect" {

@@ -62,8 +62,8 @@ type ServerConfig struct {
 // ClientConfig - used to pass configuration overrides to ClientStart()
 type ClientConfig struct {
 	Name        string
-	Timeout     time.Duration
-	RetryTimer  time.Duration
+	Timeout     time.Duration // the duration to wait before abandoning a dial attempt
+	RetryTimer  time.Duration // the duration to wait in dial loop iteration and reconnect attempts
 	LogLevel    string
 	MultiClient bool
 	Encryption  bool

@@ -25,7 +25,7 @@ A simple-to-use package that uses unix sockets on Mac/Linux to create a communic
 Create a server with the default configuration and start listening for the client:
 
 ```go
-s, err := ipc.StartServer(&ServerConfig{Name:"<name of socket or pipe>"})
+s, err := ipc.StartServer(&ServerConfig{Name:"<name of connection>"})
 if err != nil {
 	log.Println(err)
 	return
@@ -34,7 +34,7 @@ if err != nil {
 Create a client and connect to the server:
 
 ```go
-c, err := ipc.StartClient(&ClientConfig{Name:"<name of socket or pipe>"})
+c, err := ipc.StartClient(&ClientConfig{Name:"<name of connection>"})
 if err != nil {
 	log.Println(err)
 	return
@@ -134,10 +134,16 @@ Client options:
 config := &ipc.ClientConfig  {
 	Name: (string),             // the name of the queue needs to match the name of the ServerConfig (required)
 	Encryption: (bool),         // allows encryption to be switched off (bool - default is true)
-	Timeout: (time.Duration),   // duration to wait before timing out trying to connect/reconnect (default is 0 no timeout)
-	RetryTimer: (time.Duration),// duration to wait before connection retry (default is 0 upon which connection timeouts will not be retried)
+	Timeout: (time.Duration),   // duration to wait while attempting to connect to the server (default is 0 no timeout)
+	RetryTimer: (time.Duration),// duration to wait before iterating the dial loop or reconnecting (default is 1 second)
 }
 ```
+
+By default, the `Timeout` value is 0 which allows the dial loop to iterate in perpetuity until a connection to the server is established. 
+
+In scenarios where a perpetually attempting to reconnect is impractical, a `Timeout` value should be provided. When the connection times out, no further retries will be attempted. 
+
+When a Client is no longer used, ensure that the `.Close()` method is called to prevent unnecessary perpetual connection attempts.
 
  ### Encryption
 
@@ -159,7 +165,7 @@ UnmaskPermissions: true
  
 ## Testing
 
-The package has been tested on Mac and Linux and has extensive test coverage. The following commands will run all of the tests and examples with race condition detection enabled.
+The package has been tested on Mac and Linux and has extensive test coverage. The following commands will run all the tests and examples with race condition detection enabled.
 
 ```bash
 make test run

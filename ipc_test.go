@@ -39,91 +39,70 @@ func TestStartUp_Name(t *testing.T) {
 
 func TestStartUp_Configs(t *testing.T) {
 
-	sc, err := StartServer(serverConfig("test"))
-	if err != nil {
-		t.Error(err)
-	}
-	defer func() {
-		sc.Close()
-	}()
+	scon := serverConfig("test_config")
+	ccon := clientConfig("test_config")
 
-	_, err2 := StartClient(clientConfig("test"))
-	if err2 != nil {
-		t.Error(err)
-	}
-
-	scon := serverConfig("test")
-
-	ccon := clientConfig("test")
-
-	_, err3 := StartServer(scon)
+	sc, err3 := StartServer(scon)
 	if err3 != nil {
-		t.Error(err2)
+		t.Error(err3)
 	}
+	defer sc.Close()
 
-	_, err4 := StartClient(ccon)
+	cc, err4 := StartClient(ccon)
 	if err4 != nil {
-		t.Error(err)
+		t.Error(err4)
 	}
+	defer cc.Close()
 
 	scon.MaxMsgSize = -1
 
 	_, err5 := StartServer(scon)
 	if err5 != nil {
-		t.Error(err2)
+		t.Error(err5)
 	}
 
+	//testing junk values that will default to 0
 	ccon.Timeout = -1
 	ccon.RetryTimer = -1
 
 	_, err6 := StartClient(ccon)
 	if err6 != nil {
-		t.Error(err)
+		t.Error(err6)
 	}
 
 	scon.MaxMsgSize = 1025
-	ccon.RetryTimer = 1
+	ccon.RetryTimer = 1 * time.Second
 
 	_, err7 := StartServer(scon)
 	if err7 != nil {
-		t.Error(err2)
+		t.Error(err7)
 	}
 
 	_, err8 := StartClient(ccon)
 	if err8 != nil {
+		t.Error(err8)
+	}
+}
+
+func TestUnmask(t *testing.T) {
+	scon := serverConfig("test_unmask")
+	scon.UnmaskPermissions = true
+	sc, err := StartServer(scon)
+	if err != nil {
 		t.Error(err)
 	}
+	defer sc.Close()
 
-	t.Run("Unmask Server Socket Permissions", func(t *testing.T) {
-		scon.Name = "test_perm"
-		scon.UnmaskPermissions = true
+	info, err := os.Stat(sc.listener.Addr().String())
+	if err != nil {
+		t.Error(err)
+	}
+	got := fmt.Sprintf("%04o", info.Mode().Perm())
+	want := "0777"
 
-		srv, err := StartServer(scon)
-		if err != nil {
-			t.Error(err)
-		}
-		defer func() {
-			srv.Close()
-		}()
-
-		// test would not work in windows
-		// can check test_perm.sock in /tmp after running tests to see perms
-
-		Sleep()
-
-		info, err := os.Stat(srv.listener.Addr().String())
-		if err != nil {
-			t.Error(err)
-		}
-		got := fmt.Sprintf("%04o", info.Mode().Perm())
-		want := "0777"
-
-		if got != want {
-			t.Errorf("Got %q, Wanted %q", got, want)
-		}
-
-		scon.UnmaskPermissions = false
-	})
+	if got != want {
+		t.Errorf("Got %q, Wanted %q", got, want)
+	}
 }
 
 func TestTimeoutNoServer(t *testing.T) {
@@ -131,7 +110,9 @@ func TestTimeoutNoServer(t *testing.T) {
 	ccon := clientConfig("test_timeout")
 	ccon.Timeout = 2 * time.Second
 
-	_, err := StartClient(ccon)
+	cc, err := StartClient(ccon)
+	defer cc.Close()
+
 	if !strings.Contains(err.Error(), "timed out trying to connect") {
 		t.Error(err)
 	}
@@ -140,23 +121,22 @@ func TestTimeoutNoServer(t *testing.T) {
 func TestTimeoutNoServerRetry(t *testing.T) {
 
 	ccon := clientConfig("test_timeout_retryloop")
-	ccon.Timeout = 500 * time.Millisecond //extremely impractical low value for testing purposes only
-	ccon.RetryTimer = 250 * time.Millisecond
+	ccon.Timeout = 2000 * time.Millisecond //extremely impractical low value for testing purposes only
+	ccon.RetryTimer = 1000 * time.Millisecond
 
 	dialFinished := make(chan bool, 1)
 
 	go func() {
-		time.Sleep(time.Second * 2)
+		time.Sleep(time.Second * 3)
 		dialFinished <- true
 	}()
 
 	go func() {
 		//this should retry every second and never return
 		cc, err := StartClient(ccon)
-		if err != nil {
+		defer cc.Close()
+		if err != nil && !strings.Contains(err.Error(), "timed out trying to connect") {
 			t.Error(err)
-		} else if cc != nil {
-			t.Error("client returned with success but should have got stuck in a retry loop")
 		}
 	}()
 
@@ -170,9 +150,6 @@ func TestTimeoutServerDisconnected(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func() {
-		sc.Close()
-	}()
 
 	ccon := clientConfig("test_timeout_server_disconnect")
 	ccon.Timeout = 2 * time.Second
@@ -181,6 +158,7 @@ func TestTimeoutServerDisconnected(t *testing.T) {
 	if err2 != nil {
 		t.Error(err2)
 	}
+	defer cc.Close()
 
 	go func() {
 		time.Sleep(time.Second * 1)
@@ -188,11 +166,15 @@ func TestTimeoutServerDisconnected(t *testing.T) {
 	}()
 
 	for {
-		_, err := cc.ReadTimed(time.Second*1, TimeoutMessage)
+		_, err := cc.Read() //Timed(time.Second*2, TimeoutMessage)
 		if err != nil {
-			//this error will only be reached is Timeout is specified, otherwise
+			//this error will only be reached if Timeout is specified, otherwise
 			//the reconnect dial loop will loop perpetually
 			if err.Error() == "the received channel has been closed" {
+				break
+				//}
+				//this will be the first error captured before received channel closure
+			} else if err.Error() == "timed out trying to re-connect" {
 				break
 			}
 		}
@@ -201,20 +183,19 @@ func TestTimeoutServerDisconnected(t *testing.T) {
 
 func TestWrite(t *testing.T) {
 
-	sc, err := StartServer(serverConfig("test10"))
+	sc, err := StartServer(serverConfig("test_write"))
 	if err != nil {
 		t.Error(err)
 	}
-	defer func() {
-		sc.Close()
-	}()
+	defer sc.Close()
 
 	Sleep()
 
-	cc, err2 := StartClient(clientConfig("test10"))
+	cc, err2 := StartClient(clientConfig("test_write"))
 	if err2 != nil {
 		t.Error(err)
 	}
+	defer cc.Close()
 
 	connected := make(chan bool, 1)
 
@@ -334,7 +315,7 @@ func TestRead(t *testing.T) {
 	cIPC := &Client{
 		Actor:      Actor{status: NotConnected, received: make(chan *Message)},
 		timeout:    2 * time.Second,
-		retryTimer: 1,
+		retryTimer: 1 * time.Second,
 	}
 
 	cIPC.status = Connected
@@ -374,9 +355,7 @@ func TestStatus(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func() {
-		sc.Close()
-	}()
+	defer sc.Close()
 
 	sc.setStatus(NotConnected)
 
@@ -430,15 +409,15 @@ func TestStatus(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func() {
-		sc2.Close()
-	}()
+	defer sc2.Close()
 
 	Sleep()
 	cc, err2 := StartClient(clientConfig("test_status2"))
 	if err2 != nil {
 		t.Error(err)
 	}
+	defer cc.Close()
+
 	cc.setStatus(NotConnected)
 
 	cc.getStatus()
@@ -456,9 +435,7 @@ func TestGetConnected(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func() {
-		sc.Close()
-	}()
+	defer sc.Close()
 
 	Sleep()
 
@@ -466,6 +443,7 @@ func TestGetConnected(t *testing.T) {
 	if err2 != nil {
 		t.Error(err)
 	}
+	defer cc.Close()
 
 	for {
 		cc.Read()
@@ -483,9 +461,7 @@ func TestServerWrongMessageType(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func() {
-		sc.Close()
-	}()
+	defer sc.Close()
 
 	Sleep()
 
@@ -493,6 +469,7 @@ func TestServerWrongMessageType(t *testing.T) {
 	if err2 != nil {
 		t.Error(err)
 	}
+	defer cc.Close()
 
 	connected := make(chan bool, 1)
 	connected2 := make(chan bool, 1)
@@ -530,6 +507,7 @@ func TestServerWrongMessageType(t *testing.T) {
 
 			if m.Status == "Connected" {
 				connected2 <- true
+				return
 			}
 		}
 	}()
@@ -548,9 +526,7 @@ func TestClientWrongMessageType(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func() {
-		sc.Close()
-	}()
+	defer sc.Close()
 
 	Sleep()
 
@@ -558,6 +534,7 @@ func TestClientWrongMessageType(t *testing.T) {
 	if err2 != nil {
 		t.Error(err)
 	}
+	defer cc.Close()
 
 	connected := make(chan bool, 1)
 	connected2 := make(chan bool, 1)
@@ -621,9 +598,7 @@ func TestServerCorrectMessageType(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func() {
-		sc.Close()
-	}()
+	defer sc.Close()
 
 	Sleep()
 
@@ -631,6 +606,7 @@ func TestServerCorrectMessageType(t *testing.T) {
 	if err2 != nil {
 		t.Error(err)
 	}
+	defer cc.Close()
 
 	connected := make(chan bool, 1)
 	connected2 := make(chan bool, 1)
@@ -690,9 +666,7 @@ func TestClientCorrectMessageType(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func() {
-		sc.Close()
-	}()
+	defer sc.Close()
 
 	Sleep()
 
@@ -700,6 +674,7 @@ func TestClientCorrectMessageType(t *testing.T) {
 	if err2 != nil {
 		t.Error(err)
 	}
+	defer cc.Close()
 
 	connected := make(chan bool, 1)
 	connected2 := make(chan bool, 1)
@@ -762,9 +737,7 @@ func TestServerSendMessage(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func() {
-		sc.Close()
-	}()
+	defer sc.Close()
 
 	Sleep()
 
@@ -772,6 +745,7 @@ func TestServerSendMessage(t *testing.T) {
 	if err2 != nil {
 		t.Error(err)
 	}
+	defer cc.Close()
 
 	connected := make(chan bool, 1)
 	connected2 := make(chan bool, 1)
@@ -844,9 +818,7 @@ func TestClientSendMessage(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func() {
-		sc.Close()
-	}()
+	defer sc.Close()
 
 	Sleep()
 
@@ -854,6 +826,7 @@ func TestClientSendMessage(t *testing.T) {
 	if err2 != nil {
 		t.Error(err)
 	}
+	defer cc.Close()
 
 	connected := make(chan bool, 1)
 	connected2 := make(chan bool, 1)
@@ -866,6 +839,7 @@ func TestClientSendMessage(t *testing.T) {
 			m, _ := cc.Read()
 			if m.Status == "Connected" {
 				connected <- true
+				return
 			}
 
 		}
@@ -925,9 +899,7 @@ func TestClientClose(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func() {
-		sc.Close()
-	}()
+	defer sc.Close()
 
 	Sleep()
 
@@ -978,9 +950,6 @@ func TestServerClose(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func() {
-		sc.Close()
-	}()
 
 	Sleep()
 
@@ -988,21 +957,19 @@ func TestServerClose(t *testing.T) {
 	if err2 != nil {
 		t.Error(err)
 	}
+	defer cc.Close()
 
 	holdIt := make(chan bool, 1)
 
 	go func() {
-
 		for {
-
 			m, _ := cc.Read()
 
 			if m.Status == "Reconnecting" {
 				holdIt <- false
-				break
+				return
 			}
 		}
-
 	}()
 
 	for {
@@ -1018,7 +985,6 @@ func TestServerClose(t *testing.T) {
 				break
 			}
 		}
-
 	}
 
 	<-holdIt
@@ -1026,13 +992,11 @@ func TestServerClose(t *testing.T) {
 
 func TestClientReconnect(t *testing.T) {
 
-	sc, err := StartServer(serverConfig("test127"))
+	scon := serverConfig("test127")
+	sc, err := StartServer(scon)
 	if err != nil {
 		t.Error(err)
 	}
-	defer func() {
-		sc.Close()
-	}()
 
 	Sleep()
 
@@ -1042,57 +1006,56 @@ func TestClientReconnect(t *testing.T) {
 	if err2 != nil {
 		t.Error(err)
 	}
+	defer cc.Close()
 	connected := make(chan bool, 1)
 	clientConfirm := make(chan bool, 1)
 	clientConnected := make(chan bool, 1)
 
 	go func() {
-
 		for {
-
 			m, _ := sc.Read()
 			if m.Status == "Connected" {
 				connected <- true
-				break
+				return
 			}
-
 		}
 	}()
 
 	go func() {
 
-		reconnectCheck := 0
+		reconnectCheck := false
 
 		for {
-
 			m, _ := cc.Read()
-			if m.Status == "Connected" {
-				clientConnected <- true
-			}
-
-			if m.Status == "Reconnecting" {
-				reconnectCheck = 2
-			}
-
-			if m.Status == "Connected" && reconnectCheck == 2 {
-				clientConfirm <- true
-				break
+			if m == TimeoutMessage {
+				continue
+			} else if m != nil {
+				if m.Status == "Connected" {
+					if !reconnectCheck {
+						clientConnected <- true
+					} else {
+						clientConfirm <- true
+					}
+				} else if m.Status == "Reconnecting" {
+					reconnectCheck = true
+				}
 			}
 		}
 	}()
 
+	//wait for both the client and server to connect
 	<-connected
 	<-clientConnected
 
+	//disconnect from the server
 	sc.Close()
 
-	sc2, err := StartServer(serverConfig("test127"))
+	//start a new server
+	sc2, err := StartServer(scon)
 	if err != nil {
 		t.Error(err)
 	}
-	defer func() {
-		sc2.Close()
-	}()
+	defer sc2.Close()
 
 	for {
 
@@ -1115,8 +1078,7 @@ func TestClientReconnectTimeout(t *testing.T) {
 
 	config := &ClientConfig{
 		Name:       "test7",
-		Timeout:    2 * time.Second,
-		RetryTimer: 1,
+		Timeout:    3 * time.Second,
 		Encryption: ENCRYPT_BY_DEFAULT,
 	}
 
@@ -1124,6 +1086,7 @@ func TestClientReconnectTimeout(t *testing.T) {
 	if err2 != nil {
 		t.Error(err)
 	}
+	defer cc.Close()
 
 	go func() {
 
@@ -1148,24 +1111,16 @@ func TestClientReconnectTimeout(t *testing.T) {
 		if err5 == nil {
 			if mm.Status == "Connected" {
 				connect = true
-			}
-
-			if mm.Status == "Reconnecting" {
+			} else if mm.Status == "Reconnecting" {
 				reconnect = true
-			}
-
-			if mm.Status == "Timeout" && reconnect == true && connect == true {
+			} else if mm.Status == "Timeout" && reconnect == true && connect == true {
 				return
 			}
-		}
-
-		if err5 != nil {
+		} else {
 			if err5.Error() != "timed out trying to re-connect" {
 				t.Fatal("should have got the timed out error")
 			}
-
 			break
-
 		}
 	}
 }
@@ -1176,13 +1131,11 @@ func TestServerReconnect(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	defer sc.Close()
+
 	Sleep()
-	defer func() {
-		sc.Close()
-	}()
 
 	ccon := clientConfig("test1277")
-
 	cc, err2 := StartClient(ccon)
 	if err2 != nil {
 		t.Error(err2)
@@ -1244,10 +1197,11 @@ func TestServerReconnect(t *testing.T) {
 	ccon = RetriesEnabledClientConfig
 	ccon.Name = "test1277"
 	ccon.Timeout = 2 * time.Second
-	_, err = StartClient(ccon)
+	cc2, err := StartClient(ccon)
 	if err != nil {
 		t.Error(err)
 	}
+	defer cc2.Close()
 
 	<-clientConfirm
 }
@@ -1258,9 +1212,7 @@ func TestServerReconnect2(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func() {
-		sc.Close()
-	}()
+	defer sc.Close()
 
 	Sleep()
 
@@ -1341,9 +1293,7 @@ func TestServerReconnectMulti(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func() {
-		sc.Close()
-	}()
+	defer sc.Close()
 
 	Sleep()
 
@@ -1407,6 +1357,7 @@ func TestServerReconnectMulti(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	defer c2.Close()
 
 	for {
 		m, _ := c2.Read()
@@ -1418,16 +1369,14 @@ func TestServerReconnectMulti(t *testing.T) {
 	<-clientConfirm
 }
 
-func TestServerReconnect2Mutli(t *testing.T) {
+func TestServerReconnect2Multi(t *testing.T) {
 	scon := serverConfig("test337_multi")
 	scon.MultiClient = true
 	sc, err := StartServer(scon)
 	if err != nil {
 		t.Error(err)
 	}
-	defer func() {
-		sc.Close()
-	}()
+	defer sc.Close()
 
 	Sleep()
 	ccon := clientConfig("test337_multi")
@@ -1514,7 +1463,7 @@ func TestClientReadClose(t *testing.T) {
 
 	config := &ClientConfig{
 		Timeout:    2 * time.Second,
-		RetryTimer: 1,
+		RetryTimer: 1 * time.Second,
 		Name:       "test_clientReadClose",
 		Encryption: ENCRYPT_BY_DEFAULT,
 	}
@@ -1523,6 +1472,8 @@ func TestClientReadClose(t *testing.T) {
 	if err2 != nil {
 		t.Error(err)
 	}
+	defer cc.Close()
+
 	connected := make(chan bool, 1)
 	clientTimout := make(chan bool, 1)
 	clientConnected := make(chan bool, 1)
@@ -1561,17 +1512,12 @@ func TestClientReadClose(t *testing.T) {
 			if err3 == nil {
 				if m.Status == "Connected" {
 					clientConnected <- true
-				}
-
-				if m.Status == "Reconnecting" {
+				} else if m.Status == "Reconnecting" {
 					reconnect = true
-				}
-
-				if m.Status == "Timeout" && reconnect == true {
+				} else if m.Status == "Timeout" && reconnect == true {
 					clientTimout <- true
 				}
 			}
-
 		}
 	}()
 
@@ -1589,9 +1535,7 @@ func TestServerReceiveWrongVersionNumber(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func() {
-		sc.Close()
-	}()
+	defer sc.Close()
 
 	go func() {
 
@@ -1599,6 +1543,7 @@ func TestServerReceiveWrongVersionNumber(t *testing.T) {
 		if err2 != nil {
 			t.Error(err2)
 		}
+		defer cc.Close()
 
 		Sleep()
 		//cc.ClientId = 1
@@ -1618,7 +1563,6 @@ func TestServerReceiveWrongVersionNumber(t *testing.T) {
 			cc.handshakeSendReply(1)
 			return
 		}
-
 	}()
 
 	for {
@@ -1645,9 +1589,7 @@ func TestServerReceiveWrongVersionNumberMulti(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func() {
-		sc.Close()
-	}()
+	defer sc.Close()
 
 	go func() {
 
@@ -1655,6 +1597,7 @@ func TestServerReceiveWrongVersionNumberMulti(t *testing.T) {
 		if err2 != nil {
 			t.Error(err2)
 		}
+		defer cc.Close()
 
 		Sleep()
 		cc.ClientId = 1
@@ -1700,14 +1643,14 @@ func TestServerWrongEncryption(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func() {
-		sc.Close()
-	}()
+	defer sc.Close()
 
 	Sleep()
 	ccon := clientConfig("testl337_enc")
 	ccon.Encryption = true
 	cc, err2 := StartClient(ccon)
+	defer cc.Close()
+
 	if err2 != nil {
 		if err2.Error() != "server tried to connect without encryption" {
 			t.Error(err2)
@@ -1733,8 +1676,6 @@ func TestServerWrongEncryption(t *testing.T) {
 		if err2 != nil {
 			if err2.Error() != "client is enforcing encryption" && mm.MsgType != -2 {
 				t.Error(err2)
-			} else {
-				break
 			}
 			break
 		}
@@ -1749,14 +1690,13 @@ func TestServerWrongEncryption2(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func() {
-		sc.Close()
-	}()
+	defer sc.Close()
 
 	Sleep()
 	ccon := clientConfig("testl338_enc")
 	ccon.Encryption = false
 	cc, err2 := StartClient(ccon)
+	defer cc.Close()
 	if err2 != nil {
 		if err2.Error() != "server tried to connect without encryption" {
 			t.Error(err2)
@@ -1768,8 +1708,10 @@ func TestServerWrongEncryption2(t *testing.T) {
 			m, err := cc.Read()
 			cc.logger.Debugf("Message: %v, err %s", m, err)
 			if err != nil {
-				if err.Error() != "server tried to connect without encryption" && m.MsgType != -2 {
-					t.Error(err)
+				if err.Error() != "server tried to connect without encryption" {
+					if m != nil && m.MsgType != -2 {
+						t.Error(err)
+					}
 				}
 				break
 			}
@@ -1782,8 +1724,6 @@ func TestServerWrongEncryption2(t *testing.T) {
 		if err2 != nil {
 			if err2.Error() != "public key received isn't valid length 97, got: 1" {
 				t.Error(err2)
-			} else {
-				break
 			}
 			break
 		}
