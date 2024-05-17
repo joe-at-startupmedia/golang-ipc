@@ -53,6 +53,12 @@ jobs:
         with:
           go-version: 1.21
 
+      - name: TestMac
+        if: |
+          matrix.os == 'macOS-latest'
+        run: go test --race -v
+        shell: bash
+
       - name: Build amd64
         run: |
           GOARCH=amd64 go build -v ./...
