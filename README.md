@@ -193,7 +193,24 @@ Under most configurations, a socket created by a user will by default not be wri
 ```go
 UnmaskPermissions: true	
 ```
- 
+
+## Debugging
+
+### Environment Variables
+
+You can specify debug verbosity using the `IPC_DEBUG` environment variable.
+
+```bash
+IPC_DEBUG=true make run
+```
+
+`IPC_DEBUG` accepts the following values:
+* `true`: sets the debug level to debug
+* `debug`: has the same effect as true
+* `info`: sets the debug level to info
+* `warn`: sets the debug level to warn
+* `error`: sets the debug level to error
+
 ## Testing
 
 The package has been tested on Mac and Linux and has extensive test coverage. The following commands will run all the tests and examples with race condition detection enabled.

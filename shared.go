@@ -39,21 +39,31 @@ func bytesToInt(b []byte) int {
 }
 
 func getLogrusLevel(logLevel string) logrus.Level {
-	if os.Getenv("IPC_DEBUG") == "true" {
-		return logrus.DebugLevel
-	} else {
-		switch logLevel {
-		case "debug":
+	debugEnv := os.Getenv("IPC_DEBUG")
+	if len(debugEnv) > 0 {
+		if debugEnv == "true" {
 			return logrus.DebugLevel
-		case "info":
-			return logrus.InfoLevel
-		case "warn":
-			return logrus.WarnLevel
-		case "error":
-			return logrus.ErrorLevel
+		} else {
+			return strToLogLevel(debugEnv)
 		}
+	} else {
+		return strToLogLevel(logLevel)
 	}
-	return DEFAULT_LOG_LEVEL
+}
+
+func strToLogLevel(str string) logrus.Level {
+	switch str {
+	case "debug":
+		return logrus.DebugLevel
+	case "info":
+		return logrus.InfoLevel
+	case "warn":
+		return logrus.WarnLevel
+	case "error":
+		return logrus.ErrorLevel
+	default:
+		return DEFAULT_LOG_LEVEL
+	}
 }
 
 func GetDefaultClientConnectWait() int {

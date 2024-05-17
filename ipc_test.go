@@ -1665,6 +1665,8 @@ func TestServerWrongEncryption(t *testing.T) {
 					t.Error(err)
 				}
 				break
+			} else if m.Status == "Closed" {
+				break
 			}
 		}
 	}()
@@ -1712,6 +1714,8 @@ func TestServerWrongEncryption2(t *testing.T) {
 						t.Error(err)
 					}
 				}
+				break
+			} else if m.Status == "Closed" {
 				break
 			}
 		}
