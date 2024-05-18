@@ -234,14 +234,24 @@ func (a *Actor) write() {
 	}
 }
 
-func (a *Actor) dispatchStatusBlocking(status Status) {
-	a.logger.Debugf("Actor.dispacthStatus(%s): %s", a, a.Status())
+func (a *Actor) _dispatchStatus(status Status, blocking bool) {
+	a.logger.Debugf("Actor.dispacthStatus(%s): %s", a, status)
 	a.setStatus(status)
-	a.received <- &Message{Status: status.String(), MsgType: -1}
+	if blocking {
+		a.received <- &Message{Status: status.String(), MsgType: -1}
+	} else {
+		go func() {
+			a.received <- &Message{Status: status.String(), MsgType: -1}
+		}()
+	}
 }
 
-func (a *Actor) dispatchErrorStrBlocking(err string) {
-	a.dispatchError(errors.New(err))
+func (a *Actor) dispatchStatusBlocking(status Status) {
+	a._dispatchStatus(status, true)
+}
+
+func (a *Actor) dispatchStatus(status Status) {
+	a._dispatchStatus(status, false)
 }
 
 func (a *Actor) dispatchErrorBlocking(err error) {
@@ -249,8 +259,8 @@ func (a *Actor) dispatchErrorBlocking(err error) {
 	a.received <- &Message{Err: err, MsgType: -1}
 }
 
-func (a *Actor) dispatchStatus(status Status) {
-	go a.dispatchStatusBlocking(status)
+func (a *Actor) dispatchErrorStrBlocking(err string) {
+	a.dispatchErrorBlocking(errors.New(err))
 }
 
 func (a *Actor) dispatchErrorStr(err string) {
