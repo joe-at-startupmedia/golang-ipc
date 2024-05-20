@@ -70,9 +70,11 @@ func (s *Server) acceptLoop() {
 
 		status := s.getStatus()
 
+		s.logger.Debugf("Accept loop status: %s", status)
+
 		if status == Listening || status == Disconnected {
 
-			s.conn = conn
+			s.setConn(conn)
 
 			err2 := s.handshake()
 			if err2 != nil {
