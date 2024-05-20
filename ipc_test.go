@@ -53,6 +53,13 @@ func TestStartUp_Configs(t *testing.T) {
 	}
 	defer cc.Close()
 
+}
+
+func TestStartUp_Configs2(t *testing.T) {
+
+	scon := serverConfig("test_config2")
+	ccon := clientConfig("test_config2")
+
 	scon.MaxMsgSize = -1
 
 	_, err5 := StartServer(scon)
@@ -68,6 +75,12 @@ func TestStartUp_Configs(t *testing.T) {
 	if err6 != nil {
 		t.Error(err6)
 	}
+}
+
+func TestStartUp_Configs3(t *testing.T) {
+
+	scon := serverConfig("test_config3")
+	ccon := clientConfig("test_config3")
 
 	scon.MaxMsgSize = 1025
 	ccon.RetryTimer = 1 * time.Second
