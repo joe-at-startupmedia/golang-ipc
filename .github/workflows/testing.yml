@@ -34,7 +34,7 @@ jobs:
       shell: bash
 
     - name: TestNetworkMulti
-      run: go test -tags network -race -v Multi
+      run: go test -tags network -race -v -run Multi
       shell: bash
 
     - name: TestTcp
