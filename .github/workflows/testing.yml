@@ -62,7 +62,7 @@ jobs:
       - name: TestWindows
         if: |
           matrix.os == 'windows-2022'
-        run: IPC_DEBUG=true go test -gcflags=all=-d=checkptr -race -v
+        run: IPC_DEBUG=true IPC_WAIT=2 go test -gcflags=all=-d=checkptr -race -v
         shell: bash
 
       - name: Build amd64

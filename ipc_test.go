@@ -47,6 +47,8 @@ func TestStartUp_Configs(t *testing.T) {
 	}
 	defer sc.Close()
 
+	Sleep()
+
 	cc, err4 := StartClient(ccon)
 	if err4 != nil {
 		t.Error(err4)
