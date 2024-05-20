@@ -1012,6 +1012,7 @@ func TestClientReconnect(t *testing.T) {
 						clientConnected <- true
 					} else {
 						clientConfirm <- true
+						return
 					}
 				} else if m.Status == "Reconnecting" {
 					reconnectCheck = true
