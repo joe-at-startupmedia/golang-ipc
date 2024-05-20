@@ -4,7 +4,7 @@
 [![codecov](https://codecov.io/gh/joe-at-startupmedia/golang-ipc/graph/badge.svg?token=0G9FP0QN5S)](https://codecov.io/gh/joe-at-startupmedia/golang-ipc)
 [![Go Report Card](https://goreportcard.com/badge/github.com/joe-at-startupmedia/golang-ipc)](https://goreportcard.com/report/github.com/joe-at-startupmedia/golang-ipc)
 
-Golang Inter-process communication library for Mac/Linux forked from [james-barrow/golang-ipc](https://github.com/james-barrow/golang-ipc) with the following features added:
+Golang Inter-process communication library forked from [james-barrow/golang-ipc](https://github.com/james-barrow/golang-ipc) with the following features added:
 * Adds the configurable ability to spawn multiple clients. In order to allow multiple client connections, multiple socket connections are dynamically allocated
 * Adds `ReadTimed` methods which return after the `time.Duration` provided
 * Adds a `ConnectionPool` instance to easily poll read requests from multiple clients and easily close connections
@@ -12,7 +12,7 @@ Golang Inter-process communication library for Mac/Linux forked from [james-barr
 * Removes race conditions by using `sync.Mutex` locks
 * Improves and adds more tests
 * Makes both `StartClient` and `StartServer` blocking, omitting the need for `time.Sleep` between Server and Client instantiation. All tests are ran with 0 millisecond wait times using `IPC_WAIT=0`
-
+* Adds TCP support in place of Unix domain sockets.
 
 ### Overview
  
@@ -191,6 +191,23 @@ Under most configurations, a socket created by a user will by default not be wri
 
 ```go
 UnmaskPermissions: true	
+```
+
+## TCP Support
+
+Instead of using Unix domain sockets, you can also use TCP. This provides the benefits from TCP reliability and platform interoperability (i.e. Windows) but also sacrifices performance and cpu/memory.
+
+To build with TCP support:
+```bash
+go build -tags network
+```
+
+You can customize the following using runtime environment variables:
+* `IPC_NETWORK_HOST`: The address host of which the TCP connection is bound to, by default this is 127.0.0.1
+* `IPC_NETWORK_PORT`: The address port of which the TCP connection is bound to, by default this is 8100
+
+```bash
+IPC_NETWORK_HOST=10.0.2.15 IPC_NETWORK_PORT=7200 go run -tags network
 ```
 
 ## Debugging
