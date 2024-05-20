@@ -63,14 +63,17 @@ func start(c *Client) (*Client, error) {
 	c.dispatchStatus(Connecting)
 
 	err := c.dial()
+	c.logger.Debug("finished dial")
 	if err != nil {
 		c.dispatchError(err)
 		return c, err
 	}
+	c.logger.Debug("finished error block")
 
 	go c.read(c.ByteReader)
 	go c.write()
 	c.dispatchStatus(Connected)
+	c.logger.Debug("finished connected")
 
 	return c, nil
 }
