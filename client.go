@@ -63,17 +63,14 @@ func start(c *Client) (*Client, error) {
 	c.dispatchStatus(Connecting)
 
 	err := c.dial()
-	c.logger.Debug("finished dial")
 	if err != nil {
 		c.dispatchError(err)
 		return c, err
 	}
-	c.logger.Debug("finished error block")
 
 	go c.read(c.ByteReader)
 	go c.write()
 	c.dispatchStatus(Connected)
-	c.logger.Debug("finished connected")
 
 	return c, nil
 }
@@ -95,8 +92,11 @@ func (c *Client) dial() error {
 			if err != nil {
 				c.logger.Debugf("Client.dial err: %s", err)
 			} else {
+				c.logger.Debug("dial 1")
 				c.setConn(conn)
+				c.logger.Debug("dial 2")
 				err = c.handshake()
+				c.logger.Debug("dial 3")
 				if err != nil {
 					c.logger.Errorf("%s.dial handshake err: %s", c, err)
 				}
