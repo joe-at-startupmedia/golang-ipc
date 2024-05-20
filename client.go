@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"strings"
 	"time"
 )
@@ -61,19 +60,10 @@ func NewClient(name string, config *ClientConfig) (*Client, error) {
 	return cc, err
 }
 
-func (c *Client) getSocketName() string {
-	if c.ClientId > 0 {
-		return fmt.Sprintf("%s%s%d%s", SOCKET_NAME_BASE, c.config.ClientConfig.Name, c.ClientId, SOCKET_NAME_EXT)
-	} else {
-		return fmt.Sprintf("%s%s%s", SOCKET_NAME_BASE, c.config.ClientConfig.Name, SOCKET_NAME_EXT)
-	}
-}
-
 func start(c *Client) (*Client, error) {
 	c.dispatchStatus(Connecting)
 
 	err := c.dial()
-
 	if err != nil {
 		c.dispatchError(err)
 		return c, err
@@ -99,7 +89,7 @@ func (c *Client) dial() error {
 					return
 				}
 			}
-			conn, err := net.Dial("unix", c.getSocketName())
+			conn, err := c.connect()
 			if err != nil {
 				c.logger.Debugf("Client.dial err: %s", err)
 				//connect: no such file or directory happens a lot when the client connection closes under normal circumstances

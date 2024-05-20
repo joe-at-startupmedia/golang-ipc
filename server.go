@@ -1,11 +1,7 @@
 package ipc
 
 import (
-	"fmt"
 	"io"
-	"net"
-	"os"
-	"syscall"
 )
 
 // StartServer - starts the ipc server.
@@ -50,31 +46,7 @@ func NewServer(name string, config *ServerConfig) (*Server, error) {
 
 func (s *Server) run(clientId int) (*Server, error) {
 
-	var socketName string
-
-	if clientId > 0 {
-		socketName = fmt.Sprintf("%s%s%d%s", SOCKET_NAME_BASE, s.config.ServerConfig.Name, clientId, SOCKET_NAME_EXT)
-	} else {
-		socketName = fmt.Sprintf("%s%s%s", SOCKET_NAME_BASE, s.config.ServerConfig.Name, SOCKET_NAME_EXT)
-	}
-
-	if err := os.RemoveAll(socketName); err != nil {
-		return s, err
-	}
-
-	var oldUmask int
-	if s.config.ServerConfig.UnmaskPermissions {
-		oldUmask = syscall.Umask(0)
-	}
-
-	listener, err := net.Listen("unix", socketName)
-
-	s.listener = listener
-
-	if s.config.ServerConfig.UnmaskPermissions {
-		syscall.Umask(oldUmask)
-	}
-
+	err := s.listen(clientId)
 	if err != nil {
 		s.logger.Errorf("Server.run err: %s", err)
 		return s, err

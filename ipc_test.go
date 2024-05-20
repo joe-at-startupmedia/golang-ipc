@@ -3,7 +3,6 @@ package ipc
 import (
 	"fmt"
 	"log"
-	"net"
 	"os"
 	"strings"
 	"testing"
@@ -1546,7 +1545,7 @@ func TestServerReceiveWrongVersionNumber(t *testing.T) {
 
 		Sleep()
 		//cc.ClientId = 1
-		conn, err := net.Dial("unix", cc.getSocketName())
+		conn, err := cc.connect()
 		if err != nil {
 			t.Error(err)
 		}
@@ -1600,7 +1599,7 @@ func TestServerReceiveWrongVersionNumberMulti(t *testing.T) {
 
 		Sleep()
 		cc.ClientId = 1
-		conn, err := net.Dial("unix", cc.getSocketName())
+		conn, err := cc.connect()
 		if err != nil {
 			t.Error(err)
 		}
