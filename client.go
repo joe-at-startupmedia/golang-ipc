@@ -92,11 +92,8 @@ func (c *Client) dial() error {
 			if err != nil {
 				c.logger.Debugf("Client.dial err: %s", err)
 			} else {
-				c.logger.Debug("dial 1")
 				c.setConn(conn)
-				c.logger.Debug("dial 2")
 				err = c.handshake()
-				c.logger.Debug("dial 3")
 				if err != nil {
 					c.logger.Errorf("%s.dial handshake err: %s", c, err)
 				}

@@ -12,7 +12,6 @@ Golang Inter-process communication library for Mac/Linux forked from [james-barr
 * Removes race conditions by using `sync.Mutex` locks
 * Improves and adds more tests
 * Makes both `StartClient` and `StartServer` blocking, omitting the need for `time.Sleep` between Server and Client instantiation. All tests are ran with 0 millisecond wait times using `IPC_WAIT=0`
-* Removes Windows support (oh wait, that's not a feature?)
 
 
 ### Overview
