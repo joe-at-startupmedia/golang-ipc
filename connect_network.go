@@ -42,10 +42,9 @@ func getHostAddr(clientId int) string {
 
 func (c *Client) connect() (net.Conn, error) {
 
-	conn, err := net.Dial(GetDefaultNetworkType(), getHostAddr(c.ClientId))
+	conn, err := net.Dial(DEFAULT_NETWORK_TYPE, getHostAddr(c.ClientId))
 	if err != nil {
 		c.logger.Errorf("Dial error: %s", err)
-		//c.dispatchError(err)
 	}
 
 	return conn, err
@@ -53,7 +52,7 @@ func (c *Client) connect() (net.Conn, error) {
 
 func (s *Server) listen(clientId int) error {
 
-	listener, err := net.Listen(GetDefaultNetworkType(), getHostAddr(clientId))
+	listener, err := net.Listen(DEFAULT_NETWORK_TYPE, getHostAddr(clientId))
 	if err != nil {
 		return err
 	}
