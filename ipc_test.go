@@ -3,7 +3,6 @@ package ipc
 import (
 	"fmt"
 	"log"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -16,7 +15,7 @@ var RetriesEnabledClientConfig = &ClientConfig{
 }
 
 func serverConfig(name string) *ServerConfig {
-	return &ServerConfig{Name: name, Encryption: ENCRYPT_BY_DEFAULT, UnmaskPermissions: true}
+	return &ServerConfig{Name: name, Encryption: ENCRYPT_BY_DEFAULT}
 }
 
 func clientConfig(name string) *ClientConfig {
@@ -102,29 +101,6 @@ func TestStartUp_Configs3(t *testing.T) {
 		t.Error(err8)
 	}
 	defer cc.Close()
-}
-
-func TestUnmask(t *testing.T) {
-	scon := serverConfig("test_unmask")
-	scon.UnmaskPermissions = true
-	sc, err := StartServer(scon)
-	if err != nil {
-		t.Error(err)
-	}
-	defer sc.Close()
-
-	Sleep()
-
-	info, err := os.Stat(sc.listener.Addr().String())
-	if err != nil {
-		t.Error(err)
-	}
-	got := fmt.Sprintf("%04o", info.Mode().Perm())
-	want := "0777"
-
-	if got != want {
-		t.Errorf("Got %q, Wanted %q", got, want)
-	}
 }
 
 func TestTimeoutNoServer(t *testing.T) {
