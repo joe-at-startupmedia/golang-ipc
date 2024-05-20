@@ -56,7 +56,7 @@ jobs:
       - name: TestOthers
         if: |
           matrix.os != 'ubuntu-latest'
-        run: go test --race -v
+        run: go test -test.parallel 5 --race -v
         shell: bash
 
       - name: Build amd64

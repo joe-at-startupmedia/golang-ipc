@@ -16,7 +16,7 @@ var RetriesEnabledClientConfig = &ClientConfig{
 }
 
 func serverConfig(name string) *ServerConfig {
-	return &ServerConfig{Name: name, Encryption: ENCRYPT_BY_DEFAULT}
+	return &ServerConfig{Name: name, Encryption: ENCRYPT_BY_DEFAULT, UnmaskPermissions: true}
 }
 
 func clientConfig(name string) *ClientConfig {
