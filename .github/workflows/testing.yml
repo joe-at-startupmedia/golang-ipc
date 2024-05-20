@@ -42,7 +42,7 @@ jobs:
     needs: test
     strategy:
      matrix:
-       os: [ ubuntu-latest, macOS-latest ]
+       os: [ ubuntu-latest, macOS-latest, windows-2022 ]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -62,7 +62,7 @@ jobs:
       - name: RunWindows
         if: |
           matrix.os == 'windows-2022'
-        run: IPC_DEBUG=true go test --race -v
+        run: IPC_DEBUG=true go test -tags network -race -v
         shell: bash
 
       - name: Build amd64
