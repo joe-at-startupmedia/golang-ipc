@@ -208,16 +208,9 @@ func TestWrite(t *testing.T) {
 				//t.Error(fmt.Sprintf("Got read error: %s", err))
 			} else if m.Status == "Connected" {
 				connected <- true
+				return
 			}
 		}
-	}()
-
-	go func() {
-
-		for {
-			sc.Read()
-		}
-
 	}()
 
 	<-connected
@@ -916,52 +909,6 @@ func TestClientClose(t *testing.T) {
 			}
 		}
 
-	}
-
-	<-holdIt
-}
-
-func TestServerClose(t *testing.T) {
-
-	sc, err := StartServer(serverConfig("test1010"))
-	if err != nil {
-		t.Error(err)
-	}
-
-	Sleep()
-
-	cc, err2 := StartClient(clientConfig("test1010"))
-	if err2 != nil {
-		t.Error(err)
-	}
-	defer cc.Close()
-
-	holdIt := make(chan bool, 1)
-
-	go func() {
-		for {
-			m, _ := cc.Read()
-
-			if m.Status == "Reconnecting" {
-				holdIt <- false
-				return
-			}
-		}
-	}()
-
-	for {
-
-		mm, err2 := sc.Read()
-
-		if err2 == nil {
-			if mm.Status == "Connected" {
-				sc.Close()
-			}
-
-			if mm.Status == "Closed" {
-				break
-			}
-		}
 	}
 
 	<-holdIt

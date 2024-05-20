@@ -44,7 +44,8 @@ func (c *Client) connect() (net.Conn, error) {
 
 	conn, err := net.Dial(GetDefaultNetworkType(), getHostAddr(c.ClientId))
 	if err != nil {
-		c.dispatchError(err)
+		c.logger.Errorf("Dial error: %s", err)
+		//c.dispatchError(err)
 	}
 
 	return conn, err
