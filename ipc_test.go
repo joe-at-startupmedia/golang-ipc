@@ -1362,6 +1362,7 @@ func TestServerReconnectMulti(t *testing.T) {
 	<-connected
 	cc.Close()
 
+	time.Sleep(1 * time.Second) //wait for connection to close before reconnecting
 	ccon = clientConfig("test1277_multi")
 	ccon.MultiClient = true
 	c2, err := StartClient(ccon)
