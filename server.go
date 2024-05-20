@@ -70,13 +70,13 @@ func (s *Server) acceptLoop() {
 
 		status := s.getStatus()
 
-		s.logger.Debugf("Accept loop status: %s", status)
-
 		if status == Listening || status == Disconnected {
 
 			s.setConn(conn)
 
+			s.logger.Debug("acceptLoop 1")
 			err2 := s.handshake()
+			s.logger.Debug("acceptLoop 2")
 			if err2 != nil {
 				s.logger.Errorf("Server.acceptLoop handshake err: %s", err2)
 				s.dispatchError(err2)
