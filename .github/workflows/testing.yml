@@ -64,13 +64,25 @@ jobs:
       - name: TestMac
         if: |
           matrix.os == 'macOS-latest'
-        run: go test --race -v
+        run: IPC_WAIT=1 go test --race -v -skip Multi
+        shell: bash
+
+      - name: TestMacMulti
+        if: |
+          matrix.os == 'macOS-latest'
+        run: IPC_WAIT=1 go test --race -v -run Multi
         shell: bash
 
       - name: TestWindows
         if: |
           matrix.os == 'windows-2022'
         run: IPC_WAIT=1 IPC_DEBUG=true go test -tags network -race -v -skip Multi
+        shell: bash
+
+      - name: TestWindowsMulti
+        if: |
+          matrix.os == 'windows-2022'
+        run: IPC_WAIT=1 IPC_DEBUG=true go test -tags network -race -v -run Multi
         shell: bash
 
       - name: Build amd64
