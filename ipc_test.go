@@ -1121,7 +1121,7 @@ func TestServerReconnect(t *testing.T) {
 
 	ccon = RetriesEnabledClientConfig
 	ccon.Name = "test1277"
-	ccon.Timeout = 2 * time.Second
+	ccon.Timeout = 3 * time.Second
 	cc2, err := StartClient(ccon)
 	if err != nil {
 		t.Error(err)

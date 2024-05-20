@@ -33,12 +33,16 @@ jobs:
       run: go test --race -v . -coverprofile=coverage.out -covermode=atomic
       shell: bash
 
+    - name: TestNetworkMulti
+      run: go test -tags network -race -v Multi
+      shell: bash
+
     - name: TestTcp
-      run: IPC_DEBUG=true go test -tags network -race -v
+      run: go test -tags network -race -v -skip Multi
       shell: bash
 
     - name: TestUdp
-      run: IPC_DEBUG=true IPC_NETWORK_TYPE=udp go test -tags network -race -v
+      run: IPC_NETWORK_TYPE=udp go test -tags network -race -v -skip Multi
       shell: bash
 
     - name: Upload coverage reports to Codecov
