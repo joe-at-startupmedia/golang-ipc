@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 )
 
@@ -92,11 +91,6 @@ func (c *Client) dial() error {
 			conn, err := c.connect()
 			if err != nil {
 				c.logger.Debugf("Client.dial err: %s", err)
-				//connect: no such file or directory happens a lot when the client connection closes under normal circumstances
-				if !strings.Contains(err.Error(), "connect: no such file or directory") &&
-					!strings.Contains(err.Error(), "connect: connection refused") {
-					c.dispatchError(err)
-				}
 			} else {
 				c.setConn(conn)
 				err = c.handshake()

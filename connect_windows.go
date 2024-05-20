@@ -19,7 +19,9 @@ func getSocketName(clientId int, name string) string {
 
 func (c *Client) connect() (net.Conn, error) {
 
+	c.logger.Debug("starting winio.DialPipe")
 	conn, err := winio.DialPipe(getSocketName(c.ClientId, c.config.ClientConfig.Name), nil)
+	c.logger.Debug("finished winio.DialPipe")
 
 	if err != nil && !strings.Contains(err.Error(), "the system cannot find the file specified.") {
 		c.dispatchError(err)
@@ -37,7 +39,9 @@ func (s *Server) listen(clientId int) error {
 		config = &winio.PipeConfig{SecurityDescriptor: "D:P(A;;GA;;;AU)"}
 	}
 
+	s.logger.Debug("starting winio.ListenPipe")
 	listener, err := winio.ListenPipe(socketName, config)
+	s.logger.Debug("finished winio.ListenPipe")
 	if err != nil {
 		return err
 	}
