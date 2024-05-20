@@ -62,7 +62,7 @@ jobs:
       - name: RunWindows
         if: |
           matrix.os == 'windows-2022'
-        run: IPC_DEBUG=true IPC_WAIT=2 run --race example/simple/simple.go
+        run: IPC_DEBUG=true IPC_WAIT=2 go run --race example/simple/simple.go
         shell: bash
 
       - name: Build amd64
