@@ -29,10 +29,18 @@ jobs:
       run: go vet ./...
       shell: bash
 
-    - name: Test
+    - name: TestSockets
       run: go test --race -v . -coverprofile=coverage.out -covermode=atomic
       shell: bash
-      
+
+    - name: TestTcp
+      run: IPC_DEBUG=true go test -tags network -race -v
+      shell: bash
+
+    - name: TestUdp
+      run: IPC_DEBUG=true IPC_NETWORK_TYPE=udp go test -tags network -race -v
+      shell: bash
+
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v4.0.1
       with:
@@ -59,10 +67,10 @@ jobs:
         run: go test --race -v
         shell: bash
 
-      - name: RunWindows
+      - name: TestWindows
         if: |
           matrix.os == 'windows-2022'
-        run: IPC_DEBUG=true go test -tags network -race -v
+        run: IPC_WAIT=1 IPC_DEBUG=true go test -tags network -race -v
         shell: bash
 
       - name: Build amd64

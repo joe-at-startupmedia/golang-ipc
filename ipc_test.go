@@ -54,7 +54,6 @@ func TestStartUp_Configs(t *testing.T) {
 		t.Error(err4)
 	}
 	defer cc.Close()
-
 }
 
 func TestStartUp_Configs2(t *testing.T) {
@@ -64,19 +63,23 @@ func TestStartUp_Configs2(t *testing.T) {
 
 	scon.MaxMsgSize = -1
 
-	_, err5 := StartServer(scon)
+	sc, err5 := StartServer(scon)
 	if err5 != nil {
 		t.Error(err5)
 	}
+	defer sc.Close()
+
+	Sleep()
 
 	//testing junk values that will default to 0
 	ccon.Timeout = -1
 	ccon.RetryTimer = -1
 
-	_, err6 := StartClient(ccon)
+	cc, err6 := StartClient(ccon)
 	if err6 != nil {
 		t.Error(err6)
 	}
+	defer cc.Close()
 }
 
 func TestStartUp_Configs3(t *testing.T) {
@@ -85,17 +88,20 @@ func TestStartUp_Configs3(t *testing.T) {
 	ccon := clientConfig("test_config3")
 
 	scon.MaxMsgSize = 1025
-	ccon.RetryTimer = 1 * time.Second
 
-	_, err7 := StartServer(scon)
+	sc, err7 := StartServer(scon)
 	if err7 != nil {
 		t.Error(err7)
 	}
+	defer sc.Close()
 
-	_, err8 := StartClient(ccon)
+	Sleep()
+
+	cc, err8 := StartClient(ccon)
 	if err8 != nil {
 		t.Error(err8)
 	}
+	defer cc.Close()
 }
 
 func TestUnmask(t *testing.T) {
@@ -106,6 +112,8 @@ func TestUnmask(t *testing.T) {
 		t.Error(err)
 	}
 	defer sc.Close()
+
+	Sleep()
 
 	info, err := os.Stat(sc.listener.Addr().String())
 	if err != nil {
@@ -167,6 +175,8 @@ func TestTimeoutServerDisconnected(t *testing.T) {
 
 	ccon := clientConfig("test_timeout_server_disconnect")
 	ccon.Timeout = 2 * time.Second
+
+	Sleep()
 
 	cc, err2 := StartClient(ccon)
 	if err2 != nil {
