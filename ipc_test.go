@@ -1476,7 +1476,7 @@ func TestClientReadClose(t *testing.T) {
 	Sleep()
 
 	config := &ClientConfig{
-		Timeout:    2 * time.Second,
+		Timeout:    3 * time.Second,
 		RetryTimer: 1 * time.Second,
 		Name:       "test_clientReadClose",
 		Encryption: ENCRYPT_BY_DEFAULT,
@@ -1484,7 +1484,7 @@ func TestClientReadClose(t *testing.T) {
 
 	cc, err2 := StartClient(config)
 	if err2 != nil {
-		t.Error(err)
+		t.Error(err2)
 	}
 	defer cc.Close()
 
