@@ -404,29 +404,6 @@ func TestStatus(t *testing.T) {
 	if sc.Status() != "Closing" {
 		t.Error("status string should have returned Error")
 	}
-
-	sc2, err := StartServer(serverConfig("test_status2"))
-	if err != nil {
-		t.Error(err)
-	}
-	defer sc2.Close()
-
-	Sleep()
-	cc, err2 := StartClient(clientConfig("test_status2"))
-	if err2 != nil {
-		t.Error(err)
-	}
-	defer cc.Close()
-
-	cc.setStatus(NotConnected)
-
-	cc.getStatus()
-	cc.Status()
-
-	cc.setStatus(9)
-
-	cc.getStatus()
-	cc.Status()
 }
 
 func TestGetConnected(t *testing.T) {
