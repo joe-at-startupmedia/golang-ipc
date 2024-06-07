@@ -4,6 +4,8 @@
 [![codecov](https://codecov.io/gh/joe-at-startupmedia/golang-ipc/graph/badge.svg?token=0G9FP0QN5S)](https://codecov.io/gh/joe-at-startupmedia/golang-ipc)
 [![Go Report Card](https://goreportcard.com/badge/github.com/joe-at-startupmedia/golang-ipc)](https://goreportcard.com/report/github.com/joe-at-startupmedia/golang-ipc)
 
+## This project has been moved to [joe-at-startupmedia/gipc](https://github.com/joe-at-startupmedia/gipc)
+
 Golang Inter-process communication library forked from [james-barrow/golang-ipc](https://github.com/james-barrow/golang-ipc) with the following features added:
 * Adds the configurable ability to spawn multiple clients. In order to allow multiple client connections, multiple socket connections are dynamically allocated
 * Adds `ReadTimed` methods which return after the `time.Duration` provided
